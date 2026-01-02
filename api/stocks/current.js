@@ -1,5 +1,5 @@
 const yahooFinance = require('yahoo-finance2').default;
-const { loadManagersFromConfig, getHistoricalPrice } = require('../utils');
+const { loadManagersFromConfig, getHistoricalPrice, shouldUseCache, stockDataCache, isMarketOpen } = require('../utils');
 
 module.exports = async (req, res) => {
     // Set CORS headers
@@ -13,6 +13,12 @@ module.exports = async (req, res) => {
     
     if (req.method !== 'GET') {
         return res.status(405).json({ error: 'Method not allowed' });
+    }
+    
+    // Check if we should use cached data (market is closed)
+    if (shouldUseCache() && stockDataCache.current) {
+        console.log('Market is closed, returning cached data');
+        return res.status(200).json(stockDataCache.current);
     }
     
     try {

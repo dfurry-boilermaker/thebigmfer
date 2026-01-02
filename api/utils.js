@@ -3,6 +3,61 @@ const path = require('path');
 const fs = require('fs');
 const yahooFinance = require('yahoo-finance2').default;
 
+// Cache for stock data when market is closed
+let stockDataCache = {
+    current: null,
+    monthly: null,
+    lastUpdate: null,
+    marketWasOpen: false
+};
+
+// Check if US stock market is currently open
+function isMarketOpen() {
+    const now = new Date();
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const et = new Date(utc + (-5 * 3600000)); // EST/EDT (simplified, doesn't handle DST perfectly)
+    
+    const day = et.getDay(); // 0 = Sunday, 6 = Saturday
+    const hour = et.getHours();
+    const minute = et.getMinutes();
+    const time = hour * 60 + minute; // Time in minutes since midnight
+    
+    // Market is closed on weekends
+    if (day === 0 || day === 6) {
+        return false;
+    }
+    
+    // Market hours: 9:30 AM - 4:00 PM ET
+    const marketOpen = 9 * 60 + 30; // 9:30 AM
+    const marketClose = 16 * 60; // 4:00 PM
+    
+    return time >= marketOpen && time < marketClose;
+}
+
+// Check if we should use cached data
+function shouldUseCache() {
+    // Always fetch fresh data during market hours
+    if (isMarketOpen()) {
+        return false;
+    }
+    
+    // Use cache if:
+    // 1. Market is closed AND
+    // 2. We have cached data AND
+    // 3. Cache was created when market was closed (not stale pre-market data)
+    if (stockDataCache.current && stockDataCache.lastUpdate) {
+        const cacheAge = Date.now() - stockDataCache.lastUpdate;
+        const maxCacheAge = 24 * 60 * 60 * 1000; // 24 hours
+        
+        // Use cache if it's less than 24 hours old
+        if (cacheAge < maxCacheAge) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
 // Load managers from JSON file
 function loadManagersFromConfig() {
     try {
@@ -97,6 +152,9 @@ function generateMockChartData() {
 module.exports = {
     loadManagersFromConfig,
     getHistoricalPrice,
-    generateMockChartData
+    generateMockChartData,
+    isMarketOpen,
+    shouldUseCache,
+    stockDataCache
 };
 

@@ -1,5 +1,5 @@
 const yahooFinance = require('yahoo-finance2').default;
-const { loadManagersFromConfig, getHistoricalPrice, generateMockChartData } = require('../utils');
+const { loadManagersFromConfig, getHistoricalPrice, generateMockChartData, shouldUseCache, stockDataCache, isMarketOpen } = require('../utils');
 
 module.exports = async (req, res) => {
     // Set CORS headers
@@ -21,6 +21,12 @@ module.exports = async (req, res) => {
         if (useMock) {
             const mockData = generateMockChartData();
             return res.status(200).json(mockData);
+        }
+        
+        // Check if we should use cached data (market is closed)
+        if (shouldUseCache() && stockDataCache.monthly) {
+            console.log('Market is closed, returning cached monthly data');
+            return res.status(200).json(stockDataCache.monthly);
         }
         
         const managers = loadManagersFromConfig();
