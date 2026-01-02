@@ -39,10 +39,28 @@ async function loadLeaderboard() {
                     <div class="manager-info">
                         <span class="manager-name">${escapeHtml(item.name)}</span>
                         <span class="stock-symbol">${escapeHtml(item.symbol)}</span>
+                        <span class="current-price">$${formatPrice(item.currentPrice)}</span>
+                        <div class="time-periods mobile-only">
+                            <span class="time-period">
+                                <span class="period-label">1d</span>
+                                <span class="period-value ${item.change1d === null ? 'no-data' : change1dClass}">${item.change1d !== null ? getChangeSign(item.change1d) + formatPercent(item.change1d) + '%' : '-'}</span>
+                            </span>
+                            <span class="time-period">
+                                <span class="period-label">1m</span>
+                                <span class="period-value ${item.change1m === null ? 'no-data' : change1mClass}">${item.change1m !== null ? getChangeSign(item.change1m) + formatPercent(item.change1m) + '%' : '-'}</span>
+                            </span>
+                            <span class="time-period">
+                                <span class="period-label">3m</span>
+                                <span class="period-value ${item.change3m === null ? 'no-data' : change3mClass}">${item.change3m !== null ? getChangeSign(item.change3m) + formatPercent(item.change3m) + '%' : '-'}</span>
+                            </span>
+                            <span class="time-period">
+                                <span class="period-label">YTD</span>
+                                <span class="period-value ${item.changePercent === null ? 'no-data' : changeYTDClass}">${item.changePercent !== null ? getChangeSign(item.changePercent) + formatPercent(item.changePercent) + '%' : '-'}</span>
+                            </span>
+                        </div>
                     </div>
                     <div class="price-percent-combined">
-                        <div class="current-price">$${formatPrice(item.currentPrice)}</div>
-                        <div class="time-periods">
+                        <div class="time-periods desktop-only">
                             <span class="time-period">
                                 <span class="period-label">1d</span>
                                 <span class="period-value ${item.change1d === null ? 'no-data' : change1dClass}">${item.change1d !== null ? getChangeSign(item.change1d) + formatPercent(item.change1d) + '%' : '-'}</span>
@@ -102,6 +120,18 @@ async function loadChart() {
         const useMock = new URLSearchParams(window.location.search).get('mock') === 'true';
         const response = await fetch(`${API_BASE}/stocks/monthly${useMock ? '?mock=true' : ''}`);
         const chartData = await response.json();
+        
+        // Fetch current stock data to get accurate YTD percentages
+        const currentResponse = await fetch(`${API_BASE}/stocks/current`);
+        const currentData = await currentResponse.json();
+        
+        // Create a map of symbol to YTD percentage for quick lookup
+        const ytdMap = {};
+        if (currentData && Array.isArray(currentData)) {
+            currentData.forEach(stock => {
+                ytdMap[stock.symbol] = stock.changePercent;
+            });
+        }
         
         const ctx = document.getElementById('performanceChart');
         if (!ctx) return;
@@ -195,22 +225,30 @@ async function loadChart() {
             }
         } else {
             // Labels are just months - use month-end dates
+            // But exclude the last month's month-end if we have daily data for it
+            const lastMonthName = labels.length > 0 ? labels[labels.length - 1] : null;
+            const { monthIndex: lastMonthIndex } = lastMonthName ? parseLabel(lastMonthName) : { monthIndex: -1 };
+            
+            // Calculate daily data count first to determine if we need to exclude last month-end
+            const monthEndCount = labels.length;
+            const dailyDataCount = maxDataPoints - baselineCount - monthEndCount;
+            const hasDailyDataForLastMonth = dailyDataCount > 0;
+            
+            // Add month-end dates, but exclude the last month if we have daily data for it
             for (let i = 0; i < labels.length; i++) {
                 const { monthIndex } = parseLabel(labels[i]);
                 if (monthIndex !== -1) {
+                    // Skip the last month's month-end if we have daily data for it
+                    if (hasDailyDataForLastMonth && i === labels.length - 1 && monthIndex === lastMonthIndex) {
+                        continue; // Skip adding month-end date for the last month
+                    }
                     const lastDay = new Date(currentYear, monthIndex + 1, 0).getDate();
                     dates.push(new Date(currentYear, monthIndex, lastDay));
                 }
             }
             
-            // Calculate daily data count
-            const monthEndCount = labels.length;
-            const dailyDataCount = maxDataPoints - baselineCount - monthEndCount;
-            
             // Add daily dates for current month (if we have daily data)
             if (dailyDataCount > 0 && labels.length > 0) {
-                const lastMonthName = labels[labels.length - 1];
-                const { monthIndex: lastMonthIndex } = parseLabel(lastMonthName);
                 if (lastMonthIndex !== -1) {
                     // Check if this is mock data and adjust accordingly
                     const useMock = new URLSearchParams(window.location.search).get('mock') === 'true';
@@ -304,7 +342,9 @@ async function loadChart() {
         });
 
         // Calculate min and max dates for the time scale
-        const minDate = dates[0] ? dates[0].getTime() : baselineDate.getTime();
+        // Include baseline date (Dec 31, 2025) in visible range so all stocks start at 0%
+        // But we'll hide the Dec 31 label in the ticks callback
+        const minDate = dates.length > 0 && dates[0] ? dates[0].getTime() : new Date(2025, 11, 31).getTime();
         const maxDate = dates.length > 0 && dates[dates.length - 1] ? dates[dates.length - 1].getTime() : new Date(2026, 11, 31).getTime();
         
         // Validate data before creating chart
@@ -353,7 +393,7 @@ async function loadChart() {
                         },
                         ticks: {
                             callback: function(value) {
-                                const sign = value >= 0 ? '+' : '';
+                                const sign = value > 0 ? '+' : '';
                                 return sign + value.toFixed(1) + '%';
                             },
                             color: '#666666',
@@ -401,16 +441,27 @@ async function loadChart() {
                             minRotation: 0,
                             padding: isMobile ? 4 : 8,
                             // Show up to 10 day labels
-                            maxTicksLimit: 10
+                            maxTicksLimit: 10,
+                            // Filter out Dec 31 label
+                            callback: function(value, index, ticks) {
+                                const date = new Date(value);
+                                // Skip Dec 31, 2025
+                                if (date.getFullYear() === 2025 && date.getMonth() === 11 && date.getDate() === 31) {
+                                    return '';
+                                }
+                                // Format other dates as "MMM d"
+                                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                                return `${monthNames[date.getMonth()]} ${date.getDate()}`;
+                            }
                         }
                     }
                 },
                 layout: {
                     padding: {
-                        right: isMobile ? 100 : 180,
-                        left: isMobile ? 10 : 20,
-                        top: isMobile ? 15 : 20,
-                        bottom: isMobile ? 15 : 20
+                        right: isMobile ? 30 : 120,
+                        left: isMobile ? 5 : 20,
+                        top: isMobile ? 10 : 20,
+                        bottom: isMobile ? 10 : 20
                     }
                 },
                 elements: {
@@ -438,20 +489,20 @@ async function loadChart() {
                     console.log('Is mobile:', isMobile);
                     const config = {
                         mobile: {
-                            fontSize: '600 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-                            textHeight: 14,
-                            labelOffsetX: 10,
-                            padding: 50,
-                            minSpacing: 18,
+                            fontSize: '600 8px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                            textHeight: 9,
+                            labelOffsetX: 4,
+                            padding: 35,
+                            minSpacing: 14,
                             topMargin: 5,
                             bottomMargin: 5,
-                            topBound: 30,
-                            bottomBound: 30,
-                            labelTopMargin: 10,
-                            labelBottomMargin: 10,
+                            topBound: 20,
+                            bottomBound: 20,
+                            labelTopMargin: 5,
+                            labelBottomMargin: 5,
                             lineWidth: 1.5,
-                            rectPadding: 6,
-                            rectHeightOffset: 3
+                            rectPadding: 3,
+                            rectHeightOffset: 4
                         },
                         desktop: {
                             fontSize: '600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
@@ -501,21 +552,23 @@ async function loadChart() {
                         const x = lastPoint.x;
                         const y = lastPoint.y;
                         
-                        // Get YTD percentage from the last data point (value is already the YTD %)
-                        const ytdPercent = typeof value === 'object' && value.y !== undefined ? value.y : value;
+                        // Get YTD percentage from current stock data (same source as leaderboard)
+                        const labelParts = dataset.label.split(' (');
+                        const name = labelParts[0] || '';
+                        const symbol = labelParts[1] ? labelParts[1].replace(')', '') : '';
+                        
+                        // Use YTD from current data (same as leaderboard) instead of chart data
+                        const ytdPercent = ytdMap[symbol] !== undefined ? ytdMap[symbol] : null;
                         const ytdFormatted = ytdPercent !== null && ytdPercent !== undefined 
                             ? `${ytdPercent >= 0 ? '+' : ''}${ytdPercent.toFixed(1)}%`
                             : 'N/A';
                         
-                        // Create label with name, symbol, and YTD percentage
-                        const labelParts = dataset.label.split(' (');
-                        const name = labelParts[0] || '';
-                        const symbol = labelParts[1] ? labelParts[1].replace(')', '') : '';
-                        // Format: "Name • SYMBOL • +12.5%"
+                        // Format: "Name • SYMBOL • +12.5%" for both desktop and mobile
                         const labelText = `${name} • ${symbol} • ${ytdFormatted}`;
                         
                         ctx.font = cfg.fontSize;
                         const textMetrics = ctx.measureText(labelText);
+                        const maxWidth = textMetrics.width;
                         
                         console.log(`Adding label for dataset ${datasetIndex}:`, labelText, 'at point:', { x, y });
                         
@@ -523,7 +576,7 @@ async function loadChart() {
                             datasetIndex,
                             x: x + cfg.labelOffsetX,
                             y: y,
-                            textWidth: textMetrics.width,
+                            textWidth: maxWidth,
                             textHeight: cfg.textHeight,
                             labelText,
                             color: dataset.borderColor,
@@ -536,32 +589,79 @@ async function loadChart() {
                     
                     console.log(`Collected ${labelData.length} labels`);
                     
+                    // Sort labels by Y position
                     labelData.sort((a, b) => a.y - b.y);
                     const minSpacing = cfg.minSpacing;
+                    const topBound = chartArea.top + cfg.labelTopMargin;
+                    const bottomBound = chartArea.bottom - cfg.labelBottomMargin;
                     
+                    // Improved collision detection and resolution
                     for (let i = 0; i < labelData.length; i++) {
                         const current = labelData[i];
-                        for (let j = 0; j < i; j++) {
-                            const previous = labelData[j];
-                            const currentTop = current.y - current.textHeight / 2;
-                            const currentBottom = current.y + current.textHeight / 2;
-                            const previousTop = previous.y - previous.textHeight / 2;
-                            const previousBottom = previous.y + previous.textHeight / 2;
+                        let adjusted = false;
+                        let iterations = 0;
+                        const maxIterations = 10; // Prevent infinite loops
+                        
+                        // Keep adjusting until no overlaps or max iterations
+                        while (!adjusted && iterations < maxIterations) {
+                            iterations++;
+                            adjusted = true;
                             
-                            if (!(currentBottom < previousTop || currentTop > previousBottom)) {
-                                const overlap = Math.min(currentBottom - previousTop, previousBottom - currentTop);
-                                const adjustment = overlap / 2 + minSpacing / 2;
+                            // Check against all previous labels
+                            for (let j = 0; j < i; j++) {
+                                const previous = labelData[j];
+                                const currentTop = current.y - current.textHeight / 2;
+                                const currentBottom = current.y + current.textHeight / 2;
+                                const previousTop = previous.y - previous.textHeight / 2;
+                                const previousBottom = previous.y + previous.textHeight / 2;
                                 
-                                if (current.y + adjustment <= chartArea.bottom - cfg.bottomMargin) {
-                                    current.y += adjustment;
-                                } else if (previous.y - adjustment >= chartArea.top + cfg.topMargin) {
-                                    previous.y -= adjustment;
-                                } else {
-                                    current.y = previous.y + previous.textHeight / 2 + minSpacing + current.textHeight / 2;
-                                    if (current.y > chartArea.bottom - cfg.bottomMargin) {
-                                        current.y = chartArea.bottom - cfg.bottomMargin;
+                                // Check for overlap
+                                if (!(currentBottom < previousTop || currentTop > previousBottom)) {
+                                    adjusted = false;
+                                    
+                                    // Calculate overlap amount
+                                    const overlap = Math.min(
+                                        currentBottom - previousTop,
+                                        previousBottom - currentTop
+                                    );
+                                    
+                                    // Try moving current label down first
+                                    const moveDown = overlap / 2 + minSpacing;
+                                    const newYDown = current.y + moveDown;
+                                    
+                                    if (newYDown + current.textHeight / 2 <= bottomBound) {
+                                        current.y = newYDown;
+                                    } else {
+                                        // Can't move down, try moving previous label up
+                                        const moveUp = overlap / 2 + minSpacing;
+                                        const newYUp = previous.y - moveUp;
+                                        
+                                        if (newYUp - previous.textHeight / 2 >= topBound) {
+                                            previous.y = newYUp;
+                                        } else {
+                                            // Both can't move, stack current below previous
+                                            current.y = previous.y + previous.textHeight / 2 + minSpacing + current.textHeight / 2;
+                                            
+                                            // Ensure it's within bounds
+                                            if (current.y + current.textHeight / 2 > bottomBound) {
+                                                current.y = bottomBound - current.textHeight / 2;
+                                            }
+                                            if (current.y - current.textHeight / 2 < topBound) {
+                                                current.y = topBound + current.textHeight / 2;
+                                            }
+                                        }
                                     }
                                 }
+                            }
+                            
+                            // Ensure current label is within bounds
+                            if (current.y - current.textHeight / 2 < topBound) {
+                                current.y = topBound + current.textHeight / 2;
+                                adjusted = false; // May have created new overlap
+                            }
+                            if (current.y + current.textHeight / 2 > bottomBound) {
+                                current.y = bottomBound - current.textHeight / 2;
+                                adjusted = false; // May have created new overlap
                             }
                         }
                     }
@@ -577,11 +677,25 @@ async function loadChart() {
                         // Always position label to the right of the point
                         let finalLabelX = label.x;
                         
-                        // Clamp Y position to ensure it's visible
-                        const finalLabelY = Math.max(
-                            chartArea.top + label.textHeight / 2 + 5,
-                            Math.min(chartArea.bottom - label.textHeight / 2 - 5, label.y)
-                        );
+                        // Check if label would go off the right edge
+                        const labelRightEdge = finalLabelX + label.textWidth + cfg.rectPadding * 2;
+                        const maxX = chartArea.right - 5; // 5px margin from edge
+                        
+                        if (labelRightEdge > maxX) {
+                            // Move label left to fit on screen
+                            finalLabelX = maxX - label.textWidth - cfg.rectPadding * 2;
+                        }
+                        
+                        ctx.textAlign = 'left';
+                        
+                        // Use the adjusted Y position (already clamped during collision detection)
+                        // Final safety check to ensure label is visible
+                        const topBound = chartArea.top + label.textHeight / 2 + cfg.labelTopMargin;
+                        const bottomBound = chartArea.bottom - label.textHeight / 2 - cfg.labelBottomMargin;
+                        const finalLabelY = Math.max(topBound, Math.min(bottomBound, label.y));
+                        
+                        // Update label Y if it was clamped for consistency
+                        label.y = finalLabelY;
                         
                         console.log(`Drawing label ${label.datasetIndex} (${label.labelText}) at:`, {
                             x: finalLabelX,
@@ -590,7 +704,10 @@ async function loadChart() {
                         });
                         
                         // Draw background rectangle with rounded corners
-                        const rectX = finalLabelX - cfg.rectPadding;
+                        // Adjust rectX based on text alignment
+                        const rectX = ctx.textAlign === 'right' 
+                            ? finalLabelX - label.textWidth - cfg.rectPadding
+                            : finalLabelX - cfg.rectPadding;
                         const rectY = finalLabelY - label.textHeight / 2 - 2;
                         const rectWidth = label.textWidth + cfg.rectPadding * 2;
                         const rectHeight = label.textHeight + cfg.rectHeightOffset;
@@ -613,6 +730,8 @@ async function loadChart() {
                         ctx.shadowBlur = 1;
                         ctx.shadowOffsetX = 0;
                         ctx.shadowOffsetY = 0.5;
+                        
+                        // Draw single line label (same format for desktop and mobile)
                         ctx.fillText(label.labelText, finalLabelX, finalLabelY);
                         ctx.shadowBlur = 0; // Reset shadow
                         ctx.restore();

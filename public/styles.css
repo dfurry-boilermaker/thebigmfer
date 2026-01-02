@@ -140,6 +140,7 @@ button:disabled {
 /* Chart Section */
 .chart-section {
     margin-bottom: 0;
+    padding: 0 !important;
 }
 
 .chart-container {
@@ -150,7 +151,7 @@ button:disabled {
     background: #fafafa;
     padding: 0;
     border-radius: 0;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .chart-container > div {
@@ -160,11 +161,14 @@ button:disabled {
 
 @media (max-width: 768px) {
     .chart-container {
-        height: 500px;
+        height: 400px;
+        min-height: 400px;
+        overflow: visible;
     }
     
     .chart-section {
-        padding: 24px;
+        padding: 16px;
+        overflow: visible;
     }
     
     .chart-section h2 {
@@ -210,6 +214,41 @@ button:disabled {
     transition: all 0.2s ease;
     border: 1px solid #e5e5e5;
     border-left: 3px solid #e5e5e5;
+}
+
+@media (max-width: 480px) {
+    .leaderboard-item {
+        grid-template-columns: 28px 1fr;
+        gap: 6px;
+        padding: 8px;
+    }
+    
+    .price-percent-combined {
+        grid-column: 1 / -1;
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 4px;
+        padding-left: 34px;
+        gap: 8px;
+    }
+    
+    .current-price {
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+    
+    .time-periods {
+        gap: 4px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+    
+    .time-period {
+        min-width: 32px;
+        flex-shrink: 0;
+    }
 }
 
 .leaderboard-item:hover {
@@ -271,16 +310,35 @@ button:disabled {
     gap: 8px;
 }
 
-.current-price {
+.manager-info .current-price {
     font-weight: 500;
-    font-size: 0.9375rem;
+    font-size: 1rem;
     color: #1a1a1a;
+    margin-top: 2px;
 }
 
 .time-periods {
     display: flex;
     gap: 16px;
     align-items: center;
+}
+
+.mobile-only {
+    display: none;
+}
+
+.desktop-only {
+    display: flex;
+}
+
+@media (max-width: 480px) {
+    .mobile-only {
+        display: flex;
+    }
+    
+    .desktop-only {
+        display: none;
+    }
 }
 
 .time-period {
@@ -448,7 +506,7 @@ button:disabled {
     }
 
     .current-price {
-        font-size: 0.8125rem;
+        font-size: 0.875rem;
     }
 
     .price-percent-combined {
@@ -489,6 +547,17 @@ button:disabled {
     section {
         padding: 16px;
     }
+    
+    .chart-container {
+        height: 350px;
+        min-height: 350px;
+        overflow: visible;
+    }
+    
+    .chart-section {
+        padding: 12px;
+        overflow: visible;
+    }
 
     .leaderboard-section {
         padding: 16px;
@@ -504,9 +573,9 @@ button:disabled {
     }
 
     .leaderboard-item {
-        grid-template-columns: 30px 1fr auto;
-        gap: 8px;
-        padding: 8px 10px;
+        grid-template-columns: 28px 1fr;
+        gap: 6px;
+        padding: 8px;
     }
 
     .rank {
@@ -514,7 +583,11 @@ button:disabled {
     }
 
     .manager-info {
-        gap: 2px;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
     }
 
     .manager-name {
@@ -525,20 +598,30 @@ button:disabled {
         font-size: 0.8125rem;
     }
 
-    .current-price {
-        font-size: 0.75rem;
+    .manager-info .current-price {
+        display: none;
     }
-
+    
+    .manager-info .time-periods {
+        display: flex;
+        flex-direction: row;
+        gap: 4px;
+        align-items: center;
+        margin-left: auto;
+    }
+    
     .price-percent-combined {
-        gap: 3px;
-    }
-
-    .time-periods {
-        gap: 6px;
+        display: none;
     }
 
     .time-period {
-        min-width: 35px;
+        min-width: 28px;
+        flex-shrink: 0;
+    }
+    
+    .current-price {
+        white-space: nowrap;
+        flex-shrink: 0;
     }
 
     .period-label {
