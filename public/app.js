@@ -7,15 +7,21 @@ let performanceChart = null;
 // Load Leaderboard
 async function loadLeaderboard() {
     try {
+        console.log('Loading leaderboard from:', `${API_BASE}/stocks/current`);
         const response = await fetch(`${API_BASE}/stocks/current`);
-        const data = await response.json();
         
         if (!response.ok) {
-            leaderboard.innerHTML = `<div class="error-message">Error: ${data.error}</div>`;
+            const errorText = await response.text();
+            console.error('Leaderboard API error:', response.status, errorText);
+            leaderboard.innerHTML = `<div class="error-message">Error ${response.status}: ${errorText || 'Failed to load data'}</div>`;
             return;
         }
         
-        if (data.length === 0) {
+        const data = await response.json();
+        console.log('Leaderboard data received:', data.length, 'items');
+        
+        if (!data || data.length === 0) {
+            console.warn('No data received from API');
             leaderboard.innerHTML = `
                 <div class="empty-state">
                     <p>No managers found.</p>
@@ -118,8 +124,19 @@ async function loadChart() {
 
         // Use mock data if ?mock=true is in URL
         const useMock = new URLSearchParams(window.location.search).get('mock') === 'true';
-        const response = await fetch(`${API_BASE}/stocks/monthly${useMock ? '?mock=true' : ''}`);
+        const url = `${API_BASE}/stocks/monthly${useMock ? '?mock=true' : ''}`;
+        console.log('Loading chart data from:', url);
+        
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Chart API error:', response.status, errorText);
+            return;
+        }
+        
         const chartData = await response.json();
+        console.log('Chart data received:', chartData);
         
         // Fetch current stock data to get accurate YTD percentages
         const currentResponse = await fetch(`${API_BASE}/stocks/current`);
