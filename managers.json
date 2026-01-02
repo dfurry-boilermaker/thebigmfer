@@ -1,0 +1,46 @@
+[
+  {
+    "name": "Daniel",
+    "stockSymbol": "NBIS"
+  },
+  {
+    "name": "Sam",
+    "stockSymbol": "NVDA"
+  },
+  {
+    "name": "Szklarek",
+    "stockSymbol": "WY"
+  },
+  {
+    "name": "Cale",
+    "stockSymbol": "NVO"
+  },
+  {
+    "name": "Charlie",
+    "stockSymbol": "TSLA"
+  },
+  {
+    "name": "Kruse",
+    "stockSymbol": "AMTM"
+  },
+  {
+    "name": "Kyle",
+    "stockSymbol": "PLTR"
+  },
+  {
+    "name": "Adam",
+    "stockSymbol": "JPM"
+  },
+  {
+    "name": "Carson",
+    "stockSymbol": "AMZN"
+  },
+  {
+    "name": "Grant",
+    "stockSymbol": "WM"
+  },
+  {
+    "name": "Nick",
+    "stockSymbol": "PM"
+  }
+]

@@ -1,0 +1,15 @@
+[
+  {
+    "name": "Manager Name 1",
+    "stockSymbol": "AAPL"
+  },
+  {
+    "name": "Manager Name 2",
+    "stockSymbol": "TSLA"
+  },
+  {
+    "name": "Manager Name 3",
+    "stockSymbol": "MSFT"
+  }
+]
+

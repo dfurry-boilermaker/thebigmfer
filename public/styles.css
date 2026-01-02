@@ -1,0 +1,552 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+    background: #fafafa;
+    min-height: 100vh;
+    padding: 0;
+    color: #1a1a1a;
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 24px;
+}
+
+header {
+    text-align: left;
+    color: #1a1a1a;
+    margin-bottom: 48px;
+    padding: 32px 0 24px;
+    border-bottom: 1px solid #e5e5e5;
+}
+
+header h1 {
+    font-size: 1.75rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+    letter-spacing: -0.02em;
+    color: #1a1a1a;
+}
+
+.subtitle {
+    font-size: 1rem;
+    color: #8a8a8a;
+    font-weight: 400;
+}
+
+.main-content {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    margin-bottom: 48px;
+}
+
+section {
+    background: #fafafa;
+    border-radius: 8px;
+    padding: 32px;
+    box-shadow: none;
+    border: none;
+}
+
+section h2 {
+    margin-bottom: 24px;
+    color: #1a1a1a;
+    font-size: 1.5rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+/* Add Manager Form */
+.add-manager-section {
+    grid-column: 1;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #555;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: border-color 0.3s;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+button {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    width: 100%;
+}
+
+button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+button:active {
+    transform: translateY(0);
+}
+
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.error-message {
+    margin-top: 15px;
+    padding: 12px;
+    background: #fee;
+    color: #c33;
+    border-radius: 8px;
+    display: none;
+}
+
+.error-message.show {
+    display: block;
+}
+
+/* Chart Section */
+.chart-section {
+    margin-bottom: 0;
+}
+
+.chart-container {
+    position: relative;
+    height: 600px !important;
+    min-height: 600px;
+    width: 100% !important;
+    background: #fafafa;
+    padding: 0;
+    border-radius: 0;
+    overflow: hidden;
+}
+
+.chart-container > div {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+@media (max-width: 768px) {
+    .chart-container {
+        height: 500px;
+    }
+    
+    .chart-section {
+        padding: 24px;
+    }
+    
+    .chart-section h2 {
+        font-size: 1.25rem;
+        margin-bottom: 20px;
+    }
+}
+
+@media (max-width: 480px) {
+    .chart-container {
+        height: 400px;
+    }
+    
+    .chart-section {
+        padding: 20px;
+    }
+}
+
+/* Leaderboard */
+.leaderboard-section {
+    padding: 48px;
+}
+
+.leaderboard-section h2 {
+    margin-bottom: 32px;
+    font-size: 1.5rem;
+}
+
+.leaderboard {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.leaderboard-item {
+    display: grid;
+    grid-template-columns: 50px 1fr auto;
+    gap: 20px;
+    align-items: center;
+    padding: 14px 20px;
+    background: #fafafa;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    border: 1px solid #e5e5e5;
+    border-left: 3px solid #e5e5e5;
+}
+
+.leaderboard-item:hover {
+    background: #f5f5f5;
+    border-color: #d0d0d0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.leaderboard-item.first {
+    background: #fffbf0;
+    border-left-color: #f5c842;
+}
+
+.leaderboard-item.second {
+    background: #f8f8f8;
+    border-left-color: #c0c0c0;
+}
+
+.leaderboard-item.third {
+    background: #faf5f0;
+    border-left-color: #d4a574;
+}
+
+.rank {
+    font-size: 1rem;
+    font-weight: 600;
+    text-align: center;
+    color: #8a8a8a;
+}
+
+.leaderboard-item.first .rank,
+.leaderboard-item.second .rank,
+.leaderboard-item.third .rank {
+    color: #1a1a1a;
+}
+
+.manager-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.manager-name {
+    font-weight: 500;
+    font-size: 1rem;
+    color: #1a1a1a;
+}
+
+.stock-symbol {
+    color: #8a8a8a;
+    font-size: 1rem;
+    font-weight: 400;
+}
+
+.price-percent-combined {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+}
+
+.current-price {
+    font-weight: 500;
+    font-size: 0.9375rem;
+    color: #1a1a1a;
+}
+
+.time-periods {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+}
+
+.time-period {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    min-width: 50px;
+}
+
+.period-label {
+    font-size: 0.75rem;
+    color: #8a8a8a;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.period-value {
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.period-value.positive {
+    color: #10b981;
+    font-weight: 600;
+}
+
+.period-value.negative {
+    color: #ef4444;
+    font-weight: 600;
+}
+
+.period-value.no-data {
+    color: #1a1a1a;
+}
+
+/* Managers List */
+.managers-section {
+}
+
+.managers-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 15px;
+}
+
+.manager-card {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 10px;
+    border: 2px solid #e0e0e0;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.manager-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.manager-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.manager-card-name {
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: #333;
+}
+
+.delete-btn {
+    background: #ef4444;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 5px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    width: auto;
+    transition: background 0.2s;
+}
+
+.delete-btn:hover {
+    background: #dc2626;
+}
+
+.manager-card-stock {
+    color: #666;
+    margin-bottom: 10px;
+}
+
+.manager-card-price {
+    font-size: 0.9rem;
+    color: #888;
+}
+
+.loading {
+    text-align: center;
+    padding: 40px;
+    color: #666;
+    font-style: italic;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px;
+    color: #999;
+}
+
+.empty-state p {
+    margin-top: 10px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .container {
+        padding: 0 12px;
+    }
+
+    header {
+        padding: 24px 0 20px;
+        margin-bottom: 24px;
+    }
+
+    header h1 {
+        font-size: 1.5rem;
+    }
+
+    section {
+        padding: 20px;
+    }
+
+    .leaderboard-section {
+        padding: 20px;
+    }
+
+    .leaderboard-section h2 {
+        font-size: 1.125rem;
+        margin-bottom: 16px;
+    }
+
+    .leaderboard {
+        gap: 8px;
+    }
+
+    .leaderboard-item {
+        grid-template-columns: 35px 1fr auto;
+        gap: 10px;
+        padding: 10px 12px;
+    }
+
+    .rank {
+        font-size: 0.875rem;
+    }
+
+    .manager-name {
+        font-size: 0.875rem;
+    }
+
+    .stock-symbol {
+        font-size: 0.875rem;
+    }
+
+    .current-price {
+        font-size: 0.8125rem;
+    }
+
+    .price-percent-combined {
+        gap: 4px;
+    }
+
+    .time-periods {
+        gap: 8px;
+    }
+
+    .time-period {
+        min-width: 40px;
+    }
+
+    .period-label {
+        font-size: 0.625rem;
+    }
+
+    .period-value {
+        font-size: 0.75rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .container {
+        padding: 0 8px;
+    }
+
+    header {
+        padding: 20px 0 16px;
+        margin-bottom: 20px;
+    }
+
+    header h1 {
+        font-size: 1.25rem;
+    }
+
+    section {
+        padding: 16px;
+    }
+
+    .leaderboard-section {
+        padding: 16px;
+    }
+
+    .leaderboard-section h2 {
+        font-size: 1rem;
+        margin-bottom: 12px;
+    }
+
+    .leaderboard {
+        gap: 6px;
+    }
+
+    .leaderboard-item {
+        grid-template-columns: 30px 1fr auto;
+        gap: 8px;
+        padding: 8px 10px;
+    }
+
+    .rank {
+        font-size: 0.8125rem;
+    }
+
+    .manager-info {
+        gap: 2px;
+    }
+
+    .manager-name {
+        font-size: 0.8125rem;
+    }
+
+    .stock-symbol {
+        font-size: 0.8125rem;
+    }
+
+    .current-price {
+        font-size: 0.75rem;
+    }
+
+    .price-percent-combined {
+        gap: 3px;
+    }
+
+    .time-periods {
+        gap: 6px;
+    }
+
+    .time-period {
+        min-width: 35px;
+    }
+
+    .period-label {
+        font-size: 0.5625rem;
+    }
+
+    .period-value {
+        font-size: 0.6875rem;
+    }
+}
+
