@@ -40,8 +40,15 @@ module.exports = async (req, res) => {
         
         const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         const monthLabels = [];
-        for (let i = 0; i <= currentMonth; i++) {
+        
+        // For past months, use just month name
+        for (let i = 0; i < currentMonth; i++) {
             monthLabels.push(months[i]);
+        }
+        
+        // For current month, include the specific day (e.g., "Jan 2")
+        if (currentMonth >= 0) {
+            monthLabels.push(`${months[currentMonth]} ${currentDay}`);
         }
         
         // Fetch historical data for each stock
