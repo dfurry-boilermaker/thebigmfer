@@ -606,79 +606,141 @@ async function loadChart() {
                     
                     console.log(`Collected ${labelData.length} labels`);
                     
-                    // Sort labels by Y position
-                    labelData.sort((a, b) => a.y - b.y);
+                    // Sort labels by Y position (original point position)
+                    labelData.sort((a, b) => a.originalY - b.originalY);
                     const minSpacing = cfg.minSpacing;
                     const topBound = chartArea.top + cfg.labelTopMargin;
                     const bottomBound = chartArea.bottom - cfg.labelBottomMargin;
                     
-                    // Improved collision detection and resolution
-                    for (let i = 0; i < labelData.length; i++) {
-                        const current = labelData[i];
-                        let adjusted = false;
-                        let iterations = 0;
-                        const maxIterations = 10; // Prevent infinite loops
+                    // Enhanced collision detection - resolve all overlaps
+                    let hasOverlaps = true;
+                    let iterations = 0;
+                    const maxIterations = 50; // Increased for better resolution
+                    
+                    while (hasOverlaps && iterations < maxIterations) {
+                        iterations++;
+                        hasOverlaps = false;
                         
-                        // Keep adjusting until no overlaps or max iterations
-                        while (!adjusted && iterations < maxIterations) {
-                            iterations++;
-                            adjusted = true;
+                        // Check all pairs of labels for overlaps
+                        for (let i = 0; i < labelData.length; i++) {
+                            const current = labelData[i];
+                            const currentTop = current.y - current.textHeight / 2;
+                            const currentBottom = current.y + current.textHeight / 2;
                             
-                            // Check against all previous labels
-                            for (let j = 0; j < i; j++) {
-                                const previous = labelData[j];
-                                const currentTop = current.y - current.textHeight / 2;
-                                const currentBottom = current.y + current.textHeight / 2;
-                                const previousTop = previous.y - previous.textHeight / 2;
-                                const previousBottom = previous.y + previous.textHeight / 2;
+                            for (let j = i + 1; j < labelData.length; j++) {
+                                const other = labelData[j];
+                                const otherTop = other.y - other.textHeight / 2;
+                                const otherBottom = other.y + other.textHeight / 2;
                                 
-                                // Check for overlap
-                                if (!(currentBottom < previousTop || currentTop > previousBottom)) {
-                                    adjusted = false;
+                                // Check if labels overlap
+                                if (!(currentBottom < otherTop || currentTop > otherBottom)) {
+                                    hasOverlaps = true;
                                     
-                                    // Calculate overlap amount
+                                    // Calculate overlap and required separation
                                     const overlap = Math.min(
-                                        currentBottom - previousTop,
-                                        previousBottom - currentTop
+                                        currentBottom - otherTop,
+                                        otherBottom - currentTop
                                     );
+                                    const requiredSeparation = minSpacing;
+                                    const totalNeeded = overlap + requiredSeparation;
                                     
-                                    // Try moving current label down first
-                                    const moveDown = overlap / 2 + minSpacing;
-                                    const newYDown = current.y + moveDown;
+                                    // Determine which label to move (prefer moving the one further from its original position)
+                                    const currentDistance = Math.abs(current.y - current.originalY);
+                                    const otherDistance = Math.abs(other.y - other.originalY);
                                     
-                                    if (newYDown + current.textHeight / 2 <= bottomBound) {
-                                        current.y = newYDown;
-                                    } else {
-                                        // Can't move down, try moving previous label up
-                                        const moveUp = overlap / 2 + minSpacing;
-                                        const newYUp = previous.y - moveUp;
+                                    if (currentDistance <= otherDistance) {
+                                        // Move current label
+                                        const moveAmount = totalNeeded / 2;
                                         
-                                        if (newYUp - previous.textHeight / 2 >= topBound) {
-                                            previous.y = newYUp;
+                                        // Try moving down first
+                                        if (current.y + moveAmount + current.textHeight / 2 <= bottomBound) {
+                                            current.y += moveAmount;
+                                        } else if (current.y - moveAmount - current.textHeight / 2 >= topBound) {
+                                            // Try moving up
+                                            current.y -= moveAmount;
                                         } else {
-                                            // Both can't move, stack current below previous
-                                            current.y = previous.y + previous.textHeight / 2 + minSpacing + current.textHeight / 2;
-                                            
-                                            // Ensure it's within bounds
-                                            if (current.y + current.textHeight / 2 > bottomBound) {
-                                                current.y = bottomBound - current.textHeight / 2;
+                                            // Can't move current, try moving other
+                                            if (other.y + moveAmount + other.textHeight / 2 <= bottomBound) {
+                                                other.y += moveAmount;
+                                            } else if (other.y - moveAmount - other.textHeight / 2 >= topBound) {
+                                                other.y -= moveAmount;
+                                            } else {
+                                                // Both constrained, force separation
+                                                const midPoint = (current.y + other.y) / 2;
+                                                const halfSeparation = (current.textHeight + other.textHeight) / 2 + requiredSeparation;
+                                                current.y = Math.max(topBound + current.textHeight / 2, 
+                                                    Math.min(bottomBound - current.textHeight / 2, midPoint - halfSeparation / 2));
+                                                other.y = Math.max(topBound + other.textHeight / 2,
+                                                    Math.min(bottomBound - other.textHeight / 2, midPoint + halfSeparation / 2));
                                             }
-                                            if (current.y - current.textHeight / 2 < topBound) {
-                                                current.y = topBound + current.textHeight / 2;
+                                        }
+                                    } else {
+                                        // Move other label
+                                        const moveAmount = totalNeeded / 2;
+                                        
+                                        // Try moving down first
+                                        if (other.y + moveAmount + other.textHeight / 2 <= bottomBound) {
+                                            other.y += moveAmount;
+                                        } else if (other.y - moveAmount - other.textHeight / 2 >= topBound) {
+                                            // Try moving up
+                                            other.y -= moveAmount;
+                                        } else {
+                                            // Can't move other, try moving current
+                                            if (current.y + moveAmount + current.textHeight / 2 <= bottomBound) {
+                                                current.y += moveAmount;
+                                            } else if (current.y - moveAmount - current.textHeight / 2 >= topBound) {
+                                                current.y -= moveAmount;
+                                            } else {
+                                                // Both constrained, force separation
+                                                const midPoint = (current.y + other.y) / 2;
+                                                const halfSeparation = (current.textHeight + other.textHeight) / 2 + requiredSeparation;
+                                                current.y = Math.max(topBound + current.textHeight / 2,
+                                                    Math.min(bottomBound - current.textHeight / 2, midPoint - halfSeparation / 2));
+                                                other.y = Math.max(topBound + other.textHeight / 2,
+                                                    Math.min(bottomBound - other.textHeight / 2, midPoint + halfSeparation / 2));
                                             }
                                         }
                                     }
                                 }
                             }
                             
-                            // Ensure current label is within bounds
+                            // Ensure label is within bounds after adjustments
                             if (current.y - current.textHeight / 2 < topBound) {
                                 current.y = topBound + current.textHeight / 2;
-                                adjusted = false; // May have created new overlap
                             }
                             if (current.y + current.textHeight / 2 > bottomBound) {
                                 current.y = bottomBound - current.textHeight / 2;
-                                adjusted = false; // May have created new overlap
+                            }
+                        }
+                    }
+                    
+                    // Final pass: ensure minimum spacing between all adjacent labels
+                    labelData.sort((a, b) => a.y - b.y);
+                    for (let i = 1; i < labelData.length; i++) {
+                        const current = labelData[i];
+                        const previous = labelData[i - 1];
+                        const currentTop = current.y - current.textHeight / 2;
+                        const previousBottom = previous.y + previous.textHeight / 2;
+                        const gap = currentTop - previousBottom;
+                        
+                        if (gap < minSpacing) {
+                            const needed = minSpacing - gap;
+                            // Try to move current down
+                            if (current.y + needed / 2 + current.textHeight / 2 <= bottomBound) {
+                                current.y += needed / 2;
+                                previous.y -= needed / 2;
+                            } else {
+                                // Move previous up
+                                if (previous.y - needed / 2 - previous.textHeight / 2 >= topBound) {
+                                    previous.y -= needed / 2;
+                                    current.y += needed / 2;
+                                } else {
+                                    // Force minimum spacing
+                                    current.y = previous.y + previous.textHeight / 2 + minSpacing + current.textHeight / 2;
+                                    if (current.y + current.textHeight / 2 > bottomBound) {
+                                        current.y = bottomBound - current.textHeight / 2;
+                                    }
+                                }
                             }
                         }
                     }
