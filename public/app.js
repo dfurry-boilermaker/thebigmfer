@@ -169,7 +169,8 @@ async function loadChart() {
             '#ea580c',  // Orange
             '#16a34a',  // Emerald
             '#9333ea',  // Violet
-            '#0284c7'   // Sky Blue
+            '#0284c7',  // Sky Blue
+            '#ca8a04'   // Yellow
         ];
         
         // Detect mobile device

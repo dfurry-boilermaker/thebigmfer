@@ -42,5 +42,9 @@
   {
     "name": "Nick",
     "stockSymbol": "PM"
+  },
+  {
+    "name": "Pierino",
+    "stockSymbol": "CRCL"
   }
 ]
