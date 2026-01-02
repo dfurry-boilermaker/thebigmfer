@@ -141,10 +141,20 @@ module.exports = async (req, res) => {
         
         const stockData = await Promise.all(stockDataPromises);
         
-        res.status(200).json({
+        const responseData = {
             months: monthLabels,
             data: stockData
-        });
+        };
+        
+        // Cache the results if market is closed
+        if (!isMarketOpen()) {
+            stockDataCache.monthly = responseData;
+            stockDataCache.lastUpdate = Date.now();
+            stockDataCache.marketWasOpen = false;
+            console.log('Market is closed, caching monthly data');
+        }
+        
+        res.status(200).json(responseData);
     } catch (error) {
         console.error('Error fetching monthly stocks:', error);
         res.status(500).json({ error: 'Failed to fetch monthly stock data', details: error.message });
