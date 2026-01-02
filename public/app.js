@@ -339,6 +339,8 @@ async function loadChart() {
             const currentYTD = ytdMap[symbol];
             
             // Use timestamps from API if available, otherwise fall back to calculated dates
+            // Filter out any data points before Jan 2, 2026
+            const firstTradingDayTimestamp = firstTradingDay.getTime();
             const timeData = data.map((value, idx) => {
                 let timestamp;
                 if (timestamps.length > idx && timestamps[idx]) {
@@ -346,6 +348,11 @@ async function loadChart() {
                 } else {
                     const date = dates[idx] || dates[0] || firstTradingDay;
                     timestamp = date.getTime();
+                }
+                
+                // Skip data points before Jan 2, 2026
+                if (timestamp < firstTradingDayTimestamp) {
+                    return null;
                 }
                 
                 // For the last data point, use current YTD if available to ensure accuracy
@@ -358,7 +365,7 @@ async function loadChart() {
                     x: timestamp,
                     y: yValue
                 };
-            });
+            }).filter(point => point !== null); // Remove null entries
             
             // Calculate adaptive tension based on data density
             // More data points = smoother lines (lower tension)
@@ -420,7 +427,7 @@ async function loadChart() {
             }
         } else if (dates.length > 0) {
             // Fallback to calculated dates
-            minDate = dates[0] ? dates[0].getTime() : new Date(2025, 11, 31).getTime();
+            minDate = dates[0] ? dates[0].getTime() : new Date(2026, 0, 2).getTime(); // Jan 2, 2026
             maxDate = dates[dates.length - 1] ? dates[dates.length - 1].getTime() : new Date(2026, 11, 31).getTime();
         }
         

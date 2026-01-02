@@ -76,8 +76,8 @@ module.exports = async (req, res) => {
                 return {
                     name: manager.name,
                     symbol: symbol,
-                    data: [0],
-                    timestamps: [new Date(2025, 11, 31).getTime()]
+                    data: [],
+                    timestamps: []
                 };
             }
             
@@ -92,57 +92,75 @@ module.exports = async (req, res) => {
                     return {
                         name: manager.name,
                         symbol: symbol,
-                        data: [0],
-                        timestamps: [new Date(2025, 11, 31).getTime()]
+                        data: [],
+                        timestamps: []
                     };
                 }
                 
                 // Sort by date (ascending)
                 historical.sort((a, b) => new Date(a.date) - new Date(b.date));
                 
-                // Calculate percentage changes from baseline
-                const data = [0]; // Baseline at 0%
-                const timestamps = [new Date(2025, 11, 31).getTime()]; // Dec 31, 2025 baseline
+                // First trading day of 2026 is Jan 2, 2026
+                const firstTradingDay = new Date(2026, 0, 2); // Jan 2, 2026
                 
-                // Get month-end prices for past months
+                // Filter historical data to only include dates >= Jan 2, 2026
+                const filteredHistorical = historical.filter(entry => {
+                    const entryDate = new Date(entry.date);
+                    return entryDate >= firstTradingDay;
+                });
+                
+                // Calculate percentage changes from baseline
+                // Note: We keep baseline for calculation but won't display it (chart starts Jan 2, 2026)
+                const data = []; // Start with empty array, will add Jan 2+ data
+                const timestamps = [];
+                
+                // Get month-end prices for past months (only if after Jan 2, 2026)
                 const monthEndPrices = {};
-                historical.forEach(entry => {
+                filteredHistorical.forEach(entry => {
                     const entryDate = new Date(entry.date);
                     const month = entryDate.getMonth();
                     const day = entryDate.getDate();
                     const lastDayOfMonth = new Date(entryDate.getFullYear(), month + 1, 0).getDate();
                     
-                    // Store month-end price
+                    // Store month-end price (only if it's on or after Jan 2, 2026)
                     if (day === lastDayOfMonth && month < currentMonth) {
-                        monthEndPrices[month] = entry.close;
+                        const monthEndDate = new Date(2026, month + 1, 0);
+                        if (monthEndDate >= firstTradingDay) {
+                            monthEndPrices[month] = entry.close;
+                        }
                     }
                 });
                 
-                // Add month-end data points for past months
+                // Add month-end data points for past months (only if after Jan 2, 2026)
                 for (let i = 0; i < currentMonth; i++) {
                     if (monthEndPrices[i] !== undefined) {
                         const percentChange = ((monthEndPrices[i] - baselinePrice) / baselinePrice) * 100;
                         data.push(percentChange);
                         // Use last day of that month
                         const monthEndDate = new Date(2026, i + 1, 0);
-                        timestamps.push(monthEndDate.getTime());
+                        // Only include if it's on or after Jan 2, 2026
+                        if (monthEndDate >= firstTradingDay) {
+                            timestamps.push(monthEndDate.getTime());
+                        }
                     }
                 }
                 
-                // For current month, use daily data up to 7 days ago (to avoid overlap with hourly)
-                const currentMonthData = historical.filter(entry => {
+                // For current month, use daily data up to 7 days ago (only if on or after Jan 2, 2026)
+                const currentMonthData = filteredHistorical.filter(entry => {
                     const entryDate = new Date(entry.date);
-                    return entryDate.getMonth() === currentMonth && entryDate < sevenDaysAgo;
+                    return entryDate.getMonth() === currentMonth && entryDate < sevenDaysAgo && entryDate >= firstTradingDay;
                 });
                 
                 currentMonthData.forEach(entry => {
                     const entryDate = new Date(entry.date);
-                    // Only include trading days (weekdays) - daily data from Yahoo Finance is already filtered to trading days
-                    const day = entryDate.getDay();
-                    if (day !== 0 && day !== 6) { // Not Sunday or Saturday
-                        const percentChange = ((entry.close - baselinePrice) / baselinePrice) * 100;
-                        data.push(percentChange);
-                        timestamps.push(entryDate.getTime());
+                    // Only include trading days (weekdays) and ensure it's >= Jan 2, 2026
+                    if (entryDate >= firstTradingDay) {
+                        const day = entryDate.getDay();
+                        if (day !== 0 && day !== 6) { // Not Sunday or Saturday
+                            const percentChange = ((entry.close - baselinePrice) / baselinePrice) * 100;
+                            data.push(percentChange);
+                            timestamps.push(entryDate.getTime());
+                        }
                     }
                 });
                 
@@ -166,8 +184,8 @@ module.exports = async (req, res) => {
                             const entryDate = entry.date;
                             const entryTimestamp = entryDate.getTime();
                             
-                            // Only add if it's newer than the last daily point
-                            if (entryTimestamp > lastDailyTimestamp) {
+                            // Only include data from Jan 2, 2026 onwards
+                            if (entryTimestamp >= firstTradingDay.getTime() && entryTimestamp > lastDailyTimestamp) {
                                 // Calculate start of hour timestamp (for open price)
                                 const hourStart = new Date(entryDate);
                                 hourStart.setMinutes(0);
@@ -176,7 +194,7 @@ module.exports = async (req, res) => {
                                 const hourStartTimestamp = hourStart.getTime();
                                 
                                 // Add open price at the start of the hour (if available)
-                                if (entry.open !== null && entry.open !== undefined && hourStartTimestamp > lastDailyTimestamp) {
+                                if (entry.open !== null && entry.open !== undefined && hourStartTimestamp >= firstTradingDay.getTime() && hourStartTimestamp > lastDailyTimestamp) {
                                     const openPercentChange = ((entry.open - baselinePrice) / baselinePrice) * 100;
                                     data.push(openPercentChange);
                                     timestamps.push(hourStartTimestamp);
@@ -215,13 +233,37 @@ module.exports = async (req, res) => {
                         console.log(`Added ${addedCount} hourly points (open + close) for ${symbol}`);
                     } else {
                         // Fallback to daily data for last 7 days if hourly not available
-                        const recentDailyData = historical.filter(entry => {
+                        const recentDailyData = filteredHistorical.filter(entry => {
                             const entryDate = new Date(entry.date);
-                            return entryDate >= sevenDaysAgo;
+                            return entryDate >= sevenDaysAgo && entryDate >= firstTradingDay;
                         });
                         
                         recentDailyData.forEach(entry => {
                             const entryDate = new Date(entry.date);
+                            // Only include data from Jan 2, 2026 onwards
+                            if (entryDate >= firstTradingDay) {
+                                // Only include trading days (weekdays)
+                                const day = entryDate.getDay();
+                                if (day !== 0 && day !== 6) { // Not Sunday or Saturday
+                                    const percentChange = ((entry.close - baselinePrice) / baselinePrice) * 100;
+                                    data.push(percentChange);
+                                    timestamps.push(entryDate.getTime());
+                                }
+                            }
+                        });
+                    }
+                } catch (intradayError) {
+                    // If hourly data fails, use daily data for recent period
+                    console.log(`Hourly data not available for ${symbol}, using daily data:`, intradayError.message);
+                    const recentDailyData = filteredHistorical.filter(entry => {
+                        const entryDate = new Date(entry.date);
+                        return entryDate >= sevenDaysAgo && entryDate >= firstTradingDay;
+                    });
+                    
+                    recentDailyData.forEach(entry => {
+                        const entryDate = new Date(entry.date);
+                        // Only include data from Jan 2, 2026 onwards
+                        if (entryDate >= firstTradingDay) {
                             // Only include trading days (weekdays)
                             const day = entryDate.getDay();
                             if (day !== 0 && day !== 6) { // Not Sunday or Saturday
@@ -229,24 +271,6 @@ module.exports = async (req, res) => {
                                 data.push(percentChange);
                                 timestamps.push(entryDate.getTime());
                             }
-                        });
-                    }
-                } catch (intradayError) {
-                    // If hourly data fails, use daily data for recent period
-                    console.log(`Hourly data not available for ${symbol}, using daily data:`, intradayError.message);
-                    const recentDailyData = historical.filter(entry => {
-                        const entryDate = new Date(entry.date);
-                        return entryDate >= sevenDaysAgo;
-                    });
-                    
-                    recentDailyData.forEach(entry => {
-                        const entryDate = new Date(entry.date);
-                        // Only include trading days (weekdays)
-                        const day = entryDate.getDay();
-                        if (day !== 0 && day !== 6) { // Not Sunday or Saturday
-                            const percentChange = ((entry.close - baselinePrice) / baselinePrice) * 100;
-                            data.push(percentChange);
-                            timestamps.push(entryDate.getTime());
                         }
                     });
                 }
@@ -262,8 +286,8 @@ module.exports = async (req, res) => {
                 return {
                     name: manager.name,
                     symbol: symbol,
-                    data: [0],
-                    timestamps: [new Date(2025, 11, 31).getTime()]
+                    data: [],
+                    timestamps: []
                 };
             }
         });
