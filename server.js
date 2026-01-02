@@ -49,6 +49,39 @@ async function getHistoricalPrice(symbol, targetDate) {
     }
 }
 
+// Get intraday/hourly data for a symbol
+async function getIntradayData(symbol, startDate, endDate, interval = '1h') {
+    try {
+        // Use chart() method for intraday data (supports hourly intervals)
+        const chartData = await yahooFinance.chart(symbol, {
+            period1: Math.floor(startDate.getTime() / 1000),
+            period2: Math.floor(endDate.getTime() / 1000),
+            interval: interval
+        });
+        
+        if (chartData && chartData.quotes && chartData.quotes.length > 0) {
+            // Convert chart format to historical format for consistency
+            return chartData.quotes.map(quote => {
+                const date = quote.date instanceof Date ? quote.date : new Date(quote.date);
+                return {
+                    date: date,
+                    close: quote.close,
+                    open: quote.open,
+                    high: quote.high,
+                    low: quote.low,
+                    volume: quote.volume
+                };
+            }).filter(quote => {
+                return quote.date && quote.close !== null && quote.close !== undefined;
+            });
+        }
+        return null;
+    } catch (error) {
+        console.log(`Intraday data not available for ${symbol}, will use daily data:`, error.message);
+        return null;
+    }
+}
+
 // Generate mock chart data
 function generateMockChartData() {
     const managers = loadManagersFromConfig();
@@ -280,7 +313,8 @@ app.get('/api/stocks/monthly', async (req, res) => {
                 return {
                     name: manager.name,
                     symbol: symbol,
-                    data: [0]
+                    data: [],
+                    timestamps: []
                 };
             }
             
@@ -295,7 +329,8 @@ app.get('/api/stocks/monthly', async (req, res) => {
                     return {
                         name: manager.name,
                         symbol: symbol,
-                        data: [0]
+                        data: [],
+                        timestamps: []
                     };
                 }
                 
@@ -303,9 +338,22 @@ app.get('/api/stocks/monthly', async (req, res) => {
                 historical.sort((a, b) => new Date(a.date) - new Date(b.date));
                 
                 // Calculate percentage changes from baseline
-                const data = [0]; // Baseline at 0%
+                // Note: We keep baseline for calculation but won't display it (chart starts Jan 2, 2026)
+                const data = []; // Start with empty array, will add Jan 2+ data
+                const timestamps = [];
                 
-                // Get month-end prices
+                // First trading day of 2026 is Jan 2, 2026
+                const firstTradingDay = new Date(2026, 0, 2); // Jan 2, 2026
+                
+                // Calculate date ranges for hourly vs daily data
+                const sevenDaysAgo = new Date(today);
+                sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+                sevenDaysAgo.setHours(0, 0, 0, 0);
+                
+                const todayEnd = new Date(today);
+                todayEnd.setHours(23, 59, 59, 999);
+                
+                // Get month-end prices for past months
                 const monthEndPrices = {};
                 historical.forEach(entry => {
                     const entryDate = new Date(entry.date);
@@ -314,41 +362,149 @@ app.get('/api/stocks/monthly', async (req, res) => {
                     const lastDayOfMonth = new Date(entryDate.getFullYear(), month + 1, 0).getDate();
                     
                     // Store month-end price
-                    if (day === lastDayOfMonth || (month === currentMonth && day === currentDay)) {
+                    if (day === lastDayOfMonth && month < currentMonth) {
                         monthEndPrices[month] = entry.close;
                     }
                 });
                 
-                // Add month-end data points
+                // Add month-end data points for past months (only if after Jan 2, 2026)
                 for (let i = 0; i < currentMonth; i++) {
                     if (monthEndPrices[i] !== undefined) {
-                        const percentChange = ((monthEndPrices[i] - baselinePrice) / baselinePrice) * 100;
-                        data.push(percentChange);
+                        const monthEndDate = new Date(2026, i + 1, 0);
+                        // Only include if it's on or after Jan 2, 2026
+                        if (monthEndDate >= firstTradingDay) {
+                            const percentChange = ((monthEndPrices[i] - baselinePrice) / baselinePrice) * 100;
+                            data.push(percentChange);
+                            timestamps.push(monthEndDate.getTime());
+                        }
                     }
                 }
                 
-                // Add daily data for current month
+                // For current month, use daily data up to 7 days ago (only if on or after Jan 2, 2026)
                 const currentMonthData = historical.filter(entry => {
                     const entryDate = new Date(entry.date);
-                    return entryDate.getMonth() === currentMonth;
+                    return entryDate.getMonth() === currentMonth && 
+                           entryDate < sevenDaysAgo && 
+                           entryDate >= firstTradingDay;
                 });
                 
                 currentMonthData.forEach(entry => {
-                    const percentChange = ((entry.close - baselinePrice) / baselinePrice) * 100;
-                    data.push(percentChange);
+                    const entryDate = new Date(entry.date);
+                    if (entryDate >= firstTradingDay) {
+                        const percentChange = ((entry.close - baselinePrice) / baselinePrice) * 100;
+                        data.push(percentChange);
+                        timestamps.push(entryDate.getTime());
+                    }
                 });
+                
+                // Try to fetch hourly data for the last 7 days (including today)
+                try {
+                    const intradayData = await getIntradayData(symbol, sevenDaysAgo, todayEnd, '1h');
+                    
+                    if (intradayData && intradayData.length > 0) {
+                        intradayData.sort((a, b) => a.date.getTime() - b.date.getTime());
+                        console.log(`Fetched ${intradayData.length} hourly data points for ${symbol}`);
+                        
+                        const lastDailyTimestamp = timestamps.length > 0 ? timestamps[timestamps.length - 1] : 0;
+                        let addedCount = 0;
+                        
+                        intradayData.forEach(entry => {
+                            const entryDate = entry.date;
+                            const entryTimestamp = entryDate.getTime();
+                            
+                            // Only include data from Jan 2, 2026 onwards
+                            if (entryTimestamp >= firstTradingDay.getTime() && entryTimestamp > lastDailyTimestamp) {
+                                // Calculate start of hour timestamp (for open price)
+                                const hourStart = new Date(entryDate);
+                                hourStart.setMinutes(0);
+                                hourStart.setSeconds(0);
+                                hourStart.setMilliseconds(0);
+                                const hourStartTimestamp = hourStart.getTime();
+                                
+                                // Add open price at the start of the hour (if available)
+                                if (entry.open !== null && entry.open !== undefined && hourStartTimestamp >= firstTradingDay.getTime() && hourStartTimestamp > lastDailyTimestamp) {
+                                    const openPercentChange = ((entry.open - baselinePrice) / baselinePrice) * 100;
+                                    data.push(openPercentChange);
+                                    timestamps.push(hourStartTimestamp);
+                                    addedCount++;
+                                }
+                                
+                                // Add close price at the end of the hour
+                                const closePercentChange = ((entry.close - baselinePrice) / baselinePrice) * 100;
+                                data.push(closePercentChange);
+                                timestamps.push(entryTimestamp);
+                                addedCount++;
+                            }
+                        });
+                        
+                        // Sort data and timestamps by timestamp to ensure chronological order
+                        const dataWithTimestamps = [];
+                        for (let i = 0; i < data.length; i++) {
+                            if (timestamps[i]) {
+                                dataWithTimestamps.push({
+                                    timestamp: timestamps[i],
+                                    value: data[i]
+                                });
+                            }
+                        }
+                        dataWithTimestamps.sort((a, b) => a.timestamp - b.timestamp);
+                        
+                        // Update data and timestamps arrays with sorted values
+                        data.length = 0;
+                        timestamps.length = 0;
+                        dataWithTimestamps.forEach(item => {
+                            data.push(item.value);
+                            timestamps.push(item.timestamp);
+                        });
+                        console.log(`Added ${addedCount} hourly points for ${symbol}`);
+                    } else {
+                        // Fallback to daily data for last 7 days
+                        const recentDailyData = historical.filter(entry => {
+                            const entryDate = new Date(entry.date);
+                            return entryDate >= sevenDaysAgo;
+                        });
+                        
+                        recentDailyData.forEach(entry => {
+                            const entryDate = new Date(entry.date);
+                            // Only include data from Jan 2, 2026 onwards
+                            if (entryDate >= firstTradingDay) {
+                                const percentChange = ((entry.close - baselinePrice) / baselinePrice) * 100;
+                                data.push(percentChange);
+                                timestamps.push(entryDate.getTime());
+                            }
+                        });
+                    }
+                } catch (intradayError) {
+                    console.log(`Hourly data not available for ${symbol}, using daily data:`, intradayError.message);
+                    const recentDailyData = historical.filter(entry => {
+                        const entryDate = new Date(entry.date);
+                        return entryDate >= sevenDaysAgo;
+                    });
+                    
+                    recentDailyData.forEach(entry => {
+                        const entryDate = new Date(entry.date);
+                        // Only include data from Jan 2, 2026 onwards
+                        if (entryDate >= firstTradingDay) {
+                            const percentChange = ((entry.close - baselinePrice) / baselinePrice) * 100;
+                            data.push(percentChange);
+                            timestamps.push(entryDate.getTime());
+                        }
+                    });
+                }
                 
                 return {
                     name: manager.name,
                     symbol: symbol,
-                    data: data
+                    data: data,
+                    timestamps: timestamps
                 };
             } catch (error) {
                 console.error(`Error fetching historical data for ${symbol}:`, error.message);
                 return {
                     name: manager.name,
                     symbol: symbol,
-                    data: [0]
+                    data: [],
+                    timestamps: []
                 };
             }
         });

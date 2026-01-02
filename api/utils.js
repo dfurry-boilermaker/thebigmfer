@@ -11,35 +11,33 @@ let stockDataCache = {
     marketWasOpen: false
 };
 
-// Check if US stock market is currently open
-function isMarketOpen() {
-    const now = new Date();
-    
-    // Get Eastern Time (handles DST automatically)
-    const etString = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
+// Check if a specific date/time is during market hours (9:30 AM - 4:00 PM ET, weekdays only)
+function isDuringMarketHours(date) {
+    // Convert date to Eastern Time
+    const etString = date.toLocaleString('en-US', { timeZone: 'America/New_York' });
     const et = new Date(etString);
     
     const day = et.getDay(); // 0 = Sunday, 6 = Saturday
-    const hour = et.getHours();
-    const minute = et.getMinutes();
-    const time = hour * 60 + minute; // Time in minutes since midnight
     
     // Market is closed on weekends
     if (day === 0 || day === 6) {
         return false;
     }
     
+    const hour = et.getHours();
+    const minute = et.getMinutes();
+    const time = hour * 60 + minute; // Time in minutes since midnight
+    
     // Market hours: 9:30 AM - 4:00 PM ET
     const marketOpen = 9 * 60 + 30; // 9:30 AM
     const marketClose = 16 * 60; // 4:00 PM
     
-    const isOpen = time >= marketOpen && time < marketClose;
-    
-    if (!isOpen) {
-        console.log(`Market is closed. Current ET time: ${hour}:${minute.toString().padStart(2, '0')}, Day: ${day}`);
-    }
-    
-    return isOpen;
+    return time >= marketOpen && time < marketClose;
+}
+
+// Check if US stock market is currently open
+function isMarketOpen() {
+    return isDuringMarketHours(new Date());
 }
 
 // Check if we should use cached data
@@ -94,6 +92,89 @@ async function getHistoricalPrice(symbol, targetDate) {
         return null;
     } catch (error) {
         console.error(`Error fetching historical price for ${symbol}:`, error.message);
+        return null;
+    }
+}
+
+// Get intraday/hourly data for a symbol
+async function getIntradayData(symbol, startDate, endDate, interval = '1h') {
+    try {
+        // Use chart() method for intraday data (supports hourly intervals)
+        // This is the recommended method for intraday data in yahoo-finance2
+        const chartData = await yahooFinance.chart(symbol, {
+            period1: Math.floor(startDate.getTime() / 1000),
+            period2: Math.floor(endDate.getTime() / 1000),
+            interval: interval
+        });
+        
+        if (chartData && chartData.quotes && chartData.quotes.length > 0) {
+            // Convert chart format to historical format for consistency
+            // Chart returns dates as Date objects
+            // Filter to only include market hours data (9:30 AM - 4:00 PM ET, weekdays)
+            const filteredQuotes = chartData.quotes.map(quote => {
+                // quote.date is already a Date object
+                const date = quote.date instanceof Date ? quote.date : new Date(quote.date);
+                return {
+                    date: date,
+                    close: quote.close,
+                    open: quote.open,
+                    high: quote.high,
+                    low: quote.low,
+                    volume: quote.volume
+                };
+            }).filter(quote => {
+                // Filter out invalid dates or null closes
+                if (!quote.date || quote.close === null || quote.close === undefined) {
+                    return false;
+                }
+                // Only include data during market hours (9:30 AM - 4:00 PM ET, weekdays)
+                return isDuringMarketHours(quote.date);
+            });
+            
+            // Expand hourly data to include both open and close prices for each hour
+            // This provides more granular intraday movement
+            const expandedData = [];
+            for (let i = 0; i < filteredQuotes.length; i++) {
+                const quote = filteredQuotes[i];
+                
+                // Add open price at the start of the hour (if available)
+                if (quote.open !== null && quote.open !== undefined) {
+                    const openDate = new Date(quote.date);
+                    // Set to start of hour (e.g., 9:30, 10:30, etc.)
+                    openDate.setMinutes(0);
+                    openDate.setSeconds(0);
+                    openDate.setMilliseconds(0);
+                    
+                    expandedData.push({
+                        date: openDate,
+                        close: quote.open, // Use open as the "close" price for this timestamp
+                        open: quote.open,
+                        high: quote.high,
+                        low: quote.low,
+                        volume: quote.volume
+                    });
+                }
+                
+                // Add close price at the end of the hour
+                if (quote.close !== null && quote.close !== undefined) {
+                    expandedData.push({
+                        date: quote.date,
+                        close: quote.close,
+                        open: quote.open,
+                        high: quote.high,
+                        low: quote.low,
+                        volume: quote.volume
+                    });
+                }
+            }
+            
+            return expandedData.length > 0 ? expandedData : filteredQuotes;
+        }
+        return null;
+    } catch (error) {
+        // Intraday data might not be available, fallback to daily
+        // This is expected for some stocks or outside market hours
+        console.log(`Intraday data not available for ${symbol}, will use daily data:`, error.message);
         return null;
     }
 }
@@ -174,8 +255,10 @@ function generateMockChartData() {
 module.exports = {
     loadManagersFromConfig,
     getHistoricalPrice,
+    getIntradayData,
     generateMockChartData,
     isMarketOpen,
+    isDuringMarketHours,
     shouldUseCache,
     stockDataCache
 };

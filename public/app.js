@@ -182,11 +182,11 @@ async function loadChart() {
         // Calculate dates for all data points (constant time frame)
         const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         const currentYear = 2026;
-        const baselineDate = new Date(2025, 11, 31); // Dec 31, 2025
+        const firstTradingDay = new Date(2026, 0, 2); // Jan 2, 2026 - first trading day
         
         // Calculate dates for each data point
+        // Note: Data now starts from Jan 2, 2026 (no Dec 31 baseline in display)
         const dates = [];
-        dates.push(new Date(baselineDate)); // Index 0: Dec 31, 2025
         
         // Helper function to parse label (e.g., "Jan 2" or "Jan")
         const parseLabel = (label) => {
@@ -332,15 +332,54 @@ async function loadChart() {
         const datasets = chartData.data.map((stock, index) => {
             const color = colors[index % colors.length];
             const data = stock.data || [];
+            const timestamps = stock.timestamps || [];
             
-            // Convert data to {x: date, y: value} format for time scale
+            // Get the symbol to look up current YTD
+            const symbol = stock.symbol;
+            const currentYTD = ytdMap[symbol];
+            
+            // Use timestamps from API if available, otherwise fall back to calculated dates
             const timeData = data.map((value, idx) => {
-                const date = dates[idx] || dates[0] || baselineDate;
+                let timestamp;
+                if (timestamps.length > idx && timestamps[idx]) {
+                    timestamp = timestamps[idx];
+                } else {
+                    const date = dates[idx] || dates[0] || firstTradingDay;
+                    timestamp = date.getTime();
+                }
+                
+                // For the last data point, use current YTD if available to ensure accuracy
+                let yValue = value;
+                if (idx === data.length - 1 && currentYTD !== null && currentYTD !== undefined) {
+                    yValue = currentYTD;
+                }
+                
                 return {
-                    x: date.getTime(),
-                    y: value
+                    x: timestamp,
+                    y: yValue
                 };
             });
+            
+            // Calculate adaptive tension based on data density
+            // More data points = smoother lines (lower tension)
+            // Fewer data points = more responsive (higher tension)
+            let adaptiveTension = 0.1; // Default - smoother
+            if (timeData.length > 0) {
+                const timeSpan = timeData[timeData.length - 1].x - timeData[0].x;
+                const dataPointsPerDay = timeData.length / (timeSpan / (1000 * 60 * 60 * 24));
+                
+                // Adjust tension based on data density (lower values = smoother)
+                if (dataPointsPerDay > 6) {
+                    // High density (hourly data) - very smooth
+                    adaptiveTension = 0.05;
+                } else if (dataPointsPerDay > 1) {
+                    // Medium density (daily data) - smooth
+                    adaptiveTension = 0.1;
+                } else {
+                    // Low density (monthly data) - moderately smooth
+                    adaptiveTension = 0.2;
+                }
+            }
             
             return {
                 label: `${stock.name} (${stock.symbol})`,
@@ -349,7 +388,7 @@ async function loadChart() {
                 backgroundColor: color,
                 borderWidth: isMobile ? 1.5 : 2,
                 fill: false,
-                tension: 0.15,
+                tension: adaptiveTension,
                 pointRadius: 0,
                 pointHoverRadius: 0,
                 pointBackgroundColor: color,
@@ -360,10 +399,30 @@ async function loadChart() {
         });
 
         // Calculate min and max dates for the time scale
-        // Include baseline date (Dec 31, 2025) in visible range so all stocks start at 0%
-        // But we'll hide the Dec 31 label in the ticks callback
-        const minDate = dates.length > 0 && dates[0] ? dates[0].getTime() : new Date(2025, 11, 31).getTime();
-        const maxDate = dates.length > 0 && dates[dates.length - 1] ? dates[dates.length - 1].getTime() : new Date(2026, 11, 31).getTime();
+        // Start from Jan 2, 2026 (first trading day)
+        let minDate = new Date(2026, 0, 2).getTime(); // Jan 2, 2026
+        let maxDate = new Date(2026, 11, 31).getTime();
+        
+        if (datasets.length > 0 && datasets[0].data.length > 0) {
+            // Find min/max from all datasets
+            const allTimestamps = [];
+            datasets.forEach(dataset => {
+                if (dataset.data && dataset.data.length > 0) {
+                    dataset.data.forEach(point => {
+                        if (point.x) allTimestamps.push(point.x);
+                    });
+                }
+            });
+            
+            if (allTimestamps.length > 0) {
+                minDate = Math.min(...allTimestamps);
+                maxDate = Math.max(...allTimestamps);
+            }
+        } else if (dates.length > 0) {
+            // Fallback to calculated dates
+            minDate = dates[0] ? dates[0].getTime() : new Date(2025, 11, 31).getTime();
+            maxDate = dates[dates.length - 1] ? dates[dates.length - 1].getTime() : new Date(2026, 11, 31).getTime();
+        }
         
         // Validate data before creating chart
         if (!datasets || datasets.length === 0) {
@@ -441,15 +500,27 @@ async function loadChart() {
                         },
                         min: minDate,
                         max: maxDate,
+                        position: 'bottom',
                         title: {
                             display: false
                         },
+                        display: true,
                         grid: {
                             display: true,
                             color: 'rgba(0, 0, 0, 0.05)',
                             drawOnChartArea: true
                         },
+                        adapters: {
+                            date: {
+                                locale: 'en-US'
+                            }
+                        },
                         ticks: {
+                            display: true,
+                            source: 'auto',
+                            maxTicksLimit: isMobile ? 5 : 8,
+                            autoSkip: true,
+                            autoSkipPadding: 10,
                             color: '#666666',
                             font: {
                                 size: isMobile ? 10 : 12,
@@ -457,12 +528,16 @@ async function loadChart() {
                             },
                             maxRotation: isMobile ? 45 : 0,
                             minRotation: 0,
-                            padding: isMobile ? 4 : 8,
-                            // Show up to 10 day labels
-                            maxTicksLimit: 10,
-                            // Filter out Dec 31 label
+                            padding: isMobile ? 8 : 12,
+                            // Format dates as "MMM d"
                             callback: function(value, index, ticks) {
+                                if (value === null || value === undefined) {
+                                    return '';
+                                }
                                 const date = new Date(value);
+                                if (isNaN(date.getTime())) {
+                                    return '';
+                                }
                                 // Skip Dec 31, 2025
                                 if (date.getFullYear() === 2025 && date.getMonth() === 11 && date.getDate() === 31) {
                                     return '';
@@ -511,7 +586,7 @@ async function loadChart() {
                             textHeight: 9,
                             labelOffsetX: 4,
                             padding: 35,
-                            minSpacing: 14,
+                            minSpacing: 3,
                             topMargin: 5,
                             bottomMargin: 5,
                             topBound: 20,
@@ -527,7 +602,7 @@ async function loadChart() {
                             textHeight: 18,
                             labelOffsetX: 14,
                             padding: 20,
-                            minSpacing: 22,
+                            minSpacing: 3,
                             topMargin: 10,
                             bottomMargin: 10,
                             topBound: 20,
@@ -601,26 +676,31 @@ async function loadChart() {
                             originalY: y,
                             originalX: x,
                             pointX: x,
-                            pointY: y
+                            pointY: y,
+                            ytdValue: ytdPercent !== null && ytdPercent !== undefined ? ytdPercent : (value !== null && value !== undefined ? value : 0)
                         });
                     });
                     
                     console.log(`Collected ${labelData.length} labels`);
                     
-                    // Sort labels by Y position (original point position)
-                    labelData.sort((a, b) => a.originalY - b.originalY);
+                    // Sort labels by YTD percentage value (highest to lowest, top to bottom)
+                    // This ensures labels are ordered correctly by their actual performance
+                    labelData.sort((a, b) => b.ytdValue - a.ytdValue);
                     const minSpacing = cfg.minSpacing;
                     const topBound = chartArea.top + cfg.labelTopMargin;
                     const bottomBound = chartArea.bottom - cfg.labelBottomMargin;
                     
-                    // Enhanced collision detection - resolve all overlaps
+                    // Enhanced collision detection - resolve all overlaps with more aggressive spacing
                     let hasOverlaps = true;
                     let iterations = 0;
-                    const maxIterations = 50; // Increased for better resolution
+                    const maxIterations = 100; // Increased for better resolution
                     
                     while (hasOverlaps && iterations < maxIterations) {
                         iterations++;
                         hasOverlaps = false;
+                        
+                        // Sort by Y position for ordered processing
+                        labelData.sort((a, b) => a.y - b.y);
                         
                         // Check all pairs of labels for overlaps
                         for (let i = 0; i < labelData.length; i++) {
@@ -633,73 +713,46 @@ async function loadChart() {
                                 const otherTop = other.y - other.textHeight / 2;
                                 const otherBottom = other.y + other.textHeight / 2;
                                 
-                                // Check if labels overlap
-                                if (!(currentBottom < otherTop || currentTop > otherBottom)) {
+                                // Check if labels overlap - calculate gap between them
+                                // If current is above other, gap = otherTop - currentBottom
+                                // If other is above current, gap = currentTop - otherBottom
+                                const gap = current.y < other.y 
+                                    ? (otherTop - currentBottom) 
+                                    : (currentTop - otherBottom);
+                                
+                                // Only adjust if labels are overlapping or touching (gap < minSpacing)
+                                if (gap < minSpacing) {
                                     hasOverlaps = true;
                                     
-                                    // Calculate overlap and required separation
-                                    const overlap = Math.min(
-                                        currentBottom - otherTop,
-                                        otherBottom - currentTop
-                                    );
-                                    const requiredSeparation = minSpacing;
-                                    const totalNeeded = overlap + requiredSeparation;
+                                    // Calculate required separation - just enough to prevent overlap
+                                    const totalNeeded = minSpacing - gap;
                                     
-                                    // Determine which label to move (prefer moving the one further from its original position)
-                                    const currentDistance = Math.abs(current.y - current.originalY);
-                                    const otherDistance = Math.abs(other.y - other.originalY);
+                                    // Determine movement direction based on YTD values (higher YTD should be above)
+                                    const currentIsAbove = current.ytdValue > other.ytdValue;
                                     
-                                    if (currentDistance <= otherDistance) {
-                                        // Move current label
-                                        const moveAmount = totalNeeded / 2;
-                                        
-                                        // Try moving down first
-                                        if (current.y + moveAmount + current.textHeight / 2 <= bottomBound) {
-                                            current.y += moveAmount;
-                                        } else if (current.y - moveAmount - current.textHeight / 2 >= topBound) {
-                                            // Try moving up
-                                            current.y -= moveAmount;
+                                    if (currentIsAbove) {
+                                        // Current should be above, move it up or other down
+                                        if (current.y - totalNeeded - current.textHeight / 2 >= topBound) {
+                                            current.y -= totalNeeded;
+                                        } else if (other.y + totalNeeded + other.textHeight / 2 <= bottomBound) {
+                                            other.y += totalNeeded;
                                         } else {
-                                            // Can't move current, try moving other
-                                            if (other.y + moveAmount + other.textHeight / 2 <= bottomBound) {
-                                                other.y += moveAmount;
-                                            } else if (other.y - moveAmount - other.textHeight / 2 >= topBound) {
-                                                other.y -= moveAmount;
-                                            } else {
-                                                // Both constrained, force separation
-                                                const midPoint = (current.y + other.y) / 2;
-                                                const halfSeparation = (current.textHeight + other.textHeight) / 2 + requiredSeparation;
-                                                current.y = Math.max(topBound + current.textHeight / 2, 
-                                                    Math.min(bottomBound - current.textHeight / 2, midPoint - halfSeparation / 2));
-                                                other.y = Math.max(topBound + other.textHeight / 2,
-                                                    Math.min(bottomBound - other.textHeight / 2, midPoint + halfSeparation / 2));
-                                            }
+                                            // Split the difference
+                                            const moveAmount = totalNeeded / 2;
+                                            current.y = Math.max(topBound + current.textHeight / 2, current.y - moveAmount);
+                                            other.y = Math.min(bottomBound - other.textHeight / 2, other.y + moveAmount);
                                         }
                                     } else {
-                                        // Move other label
-                                        const moveAmount = totalNeeded / 2;
-                                        
-                                        // Try moving down first
-                                        if (other.y + moveAmount + other.textHeight / 2 <= bottomBound) {
-                                            other.y += moveAmount;
-                                        } else if (other.y - moveAmount - other.textHeight / 2 >= topBound) {
-                                            // Try moving up
-                                            other.y -= moveAmount;
+                                        // Other should be above, move it up or current down
+                                        if (other.y - totalNeeded - other.textHeight / 2 >= topBound) {
+                                            other.y -= totalNeeded;
+                                        } else if (current.y + totalNeeded + current.textHeight / 2 <= bottomBound) {
+                                            current.y += totalNeeded;
                                         } else {
-                                            // Can't move other, try moving current
-                                            if (current.y + moveAmount + current.textHeight / 2 <= bottomBound) {
-                                                current.y += moveAmount;
-                                            } else if (current.y - moveAmount - current.textHeight / 2 >= topBound) {
-                                                current.y -= moveAmount;
-                                            } else {
-                                                // Both constrained, force separation
-                                                const midPoint = (current.y + other.y) / 2;
-                                                const halfSeparation = (current.textHeight + other.textHeight) / 2 + requiredSeparation;
-                                                current.y = Math.max(topBound + current.textHeight / 2,
-                                                    Math.min(bottomBound - current.textHeight / 2, midPoint - halfSeparation / 2));
-                                                other.y = Math.max(topBound + other.textHeight / 2,
-                                                    Math.min(bottomBound - other.textHeight / 2, midPoint + halfSeparation / 2));
-                                            }
+                                            // Split the difference
+                                            const moveAmount = totalNeeded / 2;
+                                            other.y = Math.max(topBound + other.textHeight / 2, other.y - moveAmount);
+                                            current.y = Math.min(bottomBound - current.textHeight / 2, current.y + moveAmount);
                                         }
                                     }
                                 }
@@ -715,32 +768,93 @@ async function loadChart() {
                         }
                     }
                     
-                    // Final pass: ensure minimum spacing between all adjacent labels
-                    labelData.sort((a, b) => a.y - b.y);
-                    for (let i = 1; i < labelData.length; i++) {
-                        const current = labelData[i];
-                        const previous = labelData[i - 1];
-                        const currentTop = current.y - current.textHeight / 2;
-                        const previousBottom = previous.y + previous.textHeight / 2;
-                        const gap = currentTop - previousBottom;
-                        
-                        if (gap < minSpacing) {
-                            const needed = minSpacing - gap;
-                            // Try to move current down
-                            if (current.y + needed / 2 + current.textHeight / 2 <= bottomBound) {
-                                current.y += needed / 2;
-                                previous.y -= needed / 2;
-                            } else {
-                                // Move previous up
-                                if (previous.y - needed / 2 - previous.textHeight / 2 >= topBound) {
-                                    previous.y -= needed / 2;
-                                    current.y += needed / 2;
+                    // Final pass: ensure no overlaps and maintain correct order by YTD value
+                    // Sort by YTD value (highest to lowest) to maintain performance order
+                    labelData.sort((a, b) => b.ytdValue - a.ytdValue);
+                    
+                    // Multiple passes to ensure all overlaps are resolved
+                    for (let pass = 0; pass < 5; pass++) {
+                        for (let i = 1; i < labelData.length; i++) {
+                            const current = labelData[i];
+                            const previous = labelData[i - 1];
+                            
+                            // Previous should be above current (higher YTD = higher on chart)
+                            const currentTop = current.y - current.textHeight / 2;
+                            const previousBottom = previous.y + previous.textHeight / 2;
+                            const gap = currentTop - previousBottom;
+                            
+                            // If overlapping or too close, separate them
+                            if (gap < minSpacing) {
+                                const needed = minSpacing - gap;
+                                
+                                // Try to move current down (lower YTD goes down)
+                                if (current.y + needed + current.textHeight / 2 <= bottomBound) {
+                                    current.y += needed;
+                                } else if (previous.y - needed - previous.textHeight / 2 >= topBound) {
+                                    // Move previous up (higher YTD goes up)
+                                    previous.y -= needed;
                                 } else {
-                                    // Force minimum spacing
-                                    current.y = previous.y + previous.textHeight / 2 + minSpacing + current.textHeight / 2;
-                                    if (current.y + current.textHeight / 2 > bottomBound) {
-                                        current.y = bottomBound - current.textHeight / 2;
+                                    // Split the difference if both are constrained
+                                    const moveAmount = needed / 2;
+                                    current.y = Math.min(bottomBound - current.textHeight / 2, current.y + moveAmount);
+                                    previous.y = Math.max(topBound + previous.textHeight / 2, previous.y - moveAmount);
+                                }
+                            }
+                            
+                            // Ensure previous is always above current (maintain YTD order)
+                            if (previous.ytdValue > current.ytdValue && previous.y >= current.y) {
+                                // Previous should be above, ensure proper spacing
+                                const requiredY = previous.y + previous.textHeight / 2 + minSpacing + current.textHeight / 2;
+                                if (requiredY <= bottomBound) {
+                                    current.y = requiredY;
+                                } else {
+                                    // Can't fit below, move previous up
+                                    const newPreviousY = current.y - current.textHeight / 2 - minSpacing - previous.textHeight / 2;
+                                    if (newPreviousY >= topBound) {
+                                        previous.y = newPreviousY;
+                                    } else {
+                                        // Both constrained, split the difference
+                                        const midY = (topBound + bottomBound) / 2;
+                                        previous.y = midY - (previous.textHeight + minSpacing) / 2;
+                                        current.y = midY + (current.textHeight + minSpacing) / 2;
                                     }
+                                }
+                            }
+                            
+                            // Clamp both to bounds after each adjustment
+                            previous.y = Math.max(topBound + previous.textHeight / 2, Math.min(bottomBound - previous.textHeight / 2, previous.y));
+                            current.y = Math.max(topBound + current.textHeight / 2, Math.min(bottomBound - current.textHeight / 2, current.y));
+                        }
+                    }
+                    
+                    // Final verification pass: check all pairs one more time to ensure no overlaps
+                    labelData.sort((a, b) => a.y - b.y);
+                    for (let i = 0; i < labelData.length; i++) {
+                        for (let j = i + 1; j < labelData.length; j++) {
+                            const label1 = labelData[i];
+                            const label2 = labelData[j];
+                            
+                            const label1Top = label1.y - label1.textHeight / 2;
+                            const label1Bottom = label1.y + label1.textHeight / 2;
+                            const label2Top = label2.y - label2.textHeight / 2;
+                            const label2Bottom = label2.y + label2.textHeight / 2;
+                            
+                            // Calculate gap
+                            const gap = label1.y < label2.y 
+                                ? (label2Top - label1Bottom) 
+                                : (label1Top - label2Bottom);
+                            
+                            // If still overlapping, force separation
+                            if (gap < minSpacing) {
+                                const needed = minSpacing - gap;
+                                if (label1.y < label2.y) {
+                                    // label1 is above, move label2 down
+                                    label2.y += needed;
+                                    label2.y = Math.min(bottomBound - label2.textHeight / 2, label2.y);
+                                } else {
+                                    // label2 is above, move label1 down
+                                    label1.y += needed;
+                                    label1.y = Math.min(bottomBound - label1.textHeight / 2, label1.y);
                                 }
                             }
                         }
@@ -839,10 +953,37 @@ window.addEventListener('resize', () => {
     }
 });
 
-// Auto-refresh every 30 seconds
+// Check if US stock market is currently open (client-side check)
+function isMarketOpen() {
+    const now = new Date();
+    
+    // Get Eastern Time (handles DST automatically)
+    const etString = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
+    const et = new Date(etString);
+    
+    const day = et.getDay(); // 0 = Sunday, 6 = Saturday
+    const hour = et.getHours();
+    const minute = et.getMinutes();
+    const time = hour * 60 + minute; // Time in minutes since midnight
+    
+    // Market is closed on weekends
+    if (day === 0 || day === 6) {
+        return false;
+    }
+    
+    // Market hours: 9:30 AM - 4:00 PM ET
+    const marketOpen = 9 * 60 + 30; // 9:30 AM
+    const marketClose = 16 * 60; // 4:00 PM
+    
+    return time >= marketOpen && time < marketClose;
+}
+
+// Auto-refresh every 30 seconds, but only during market hours
 setInterval(() => {
-    loadLeaderboard();
-    loadChart();
+    if (isMarketOpen()) {
+        loadLeaderboard();
+        loadChart();
+    }
 }, 30000);
 
 // Initial load
