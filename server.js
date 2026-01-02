@@ -117,15 +117,31 @@ app.get('/api/stocks/current', async (req, res) => {
         const symbols = managers.map(m => m.stockSymbol);
         
         // Fetch current quotes
-        let quotes;
+        let quotes = [];
         try {
-            quotes = await yahooFinance.quote(symbols);
+            // Try fetching all at once first
+            const result = await yahooFinance.quote(symbols);
+            quotes = Array.isArray(result) ? result : [result];
         } catch (error) {
+            console.log('Batch quote failed, fetching individually:', error.message);
             // Fallback: fetch individually
-            quotes = await Promise.all(
-                symbols.map(symbol => yahooFinance.quote(symbol))
-            );
-            quotes = quotes.flat();
+            try {
+                quotes = await Promise.all(
+                    symbols.map(async (symbol) => {
+                        try {
+                            const result = await yahooFinance.quote(symbol);
+                            return Array.isArray(result) ? result[0] : result;
+                        } catch (err) {
+                            console.error(`Failed to fetch quote for ${symbol}:`, err.message);
+                            return null;
+                        }
+                    })
+                );
+                quotes = quotes.filter(q => q !== null);
+            } catch (fallbackError) {
+                console.error('All quote fetches failed:', fallbackError);
+                quotes = [];
+            }
         }
         
         // Get baseline prices (Dec 31, 2025)
