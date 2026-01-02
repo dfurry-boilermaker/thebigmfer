@@ -42,22 +42,22 @@ function isMarketOpen() {
 
 // Check if we should use cached data
 function shouldUseCache() {
-    // Always fetch fresh data during market hours
-    if (isMarketOpen()) {
-        return false;
-    }
-    
-    // Use cache if:
-    // 1. Market is closed AND
-    // 2. We have cached data AND
-    // 3. Cache was created when market was closed (not stale pre-market data)
+    // If we have cached data, check cache age
     if (stockDataCache.current && stockDataCache.lastUpdate) {
         const cacheAge = Date.now() - stockDataCache.lastUpdate;
-        const maxCacheAge = 24 * 60 * 60 * 1000; // 24 hours
         
-        // Use cache if it's less than 24 hours old
-        if (cacheAge < maxCacheAge) {
-            return true;
+        // During market hours: use cache if less than 15 minutes old (matches refresh interval)
+        if (isMarketOpen()) {
+            const maxCacheAgeMarketHours = 15 * 60 * 1000; // 15 minutes
+            if (cacheAge < maxCacheAgeMarketHours) {
+                return true;
+            }
+        } else {
+            // Market closed: use cache if less than 24 hours old
+            const maxCacheAge = 24 * 60 * 60 * 1000; // 24 hours
+            if (cacheAge < maxCacheAge) {
+                return true;
+            }
         }
     }
     

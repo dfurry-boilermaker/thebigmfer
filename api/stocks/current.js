@@ -15,15 +15,49 @@ module.exports = async (req, res) => {
         return res.status(405).json({ error: 'Method not allowed' });
     }
     
-    // Check if we should use cached data (market is closed)
+    // Check if we should use cached data (market is closed or rate limited)
     if (shouldUseCache() && stockDataCache.current) {
-        console.log('Market is closed, returning cached data');
+        console.log('Using cached data');
         return res.status(200).json(stockDataCache.current);
     }
     
     try {
         const managers = loadManagersFromConfig();
         const symbols = managers.map(m => m.stockSymbol);
+        
+        // Check for rate limiting by trying a single quote first
+        let isRateLimited = false;
+        try {
+            const testQuote = await yahooFinance.quote(symbols[0]);
+            if (!testQuote || !testQuote.regularMarketPrice) {
+                isRateLimited = true;
+            }
+        } catch (testError) {
+            if (testError.message && testError.message.includes('Too Many Requests')) {
+                isRateLimited = true;
+            }
+        }
+        
+        // If rate limited and we have cache, use it
+        if (isRateLimited) {
+            if (stockDataCache.current) {
+                console.log('Rate limited detected, using cached data');
+                return res.status(200).json(stockDataCache.current);
+            } else {
+                console.log('Rate limited and no cache available, returning empty data');
+                // Return empty data structure so frontend doesn't break
+                const managers = loadManagersFromConfig();
+                return res.status(200).json(managers.map(m => ({
+                    name: m.name,
+                    symbol: m.stockSymbol,
+                    currentPrice: 0,
+                    changePercent: null,
+                    change1d: null,
+                    change1m: null,
+                    change3m: null
+                })));
+            }
+        }
         
         // Fetch current quotes
         let quotes = [];
@@ -32,6 +66,13 @@ module.exports = async (req, res) => {
             const result = await yahooFinance.quote(symbols);
             quotes = Array.isArray(result) ? result : [result];
         } catch (error) {
+            // Check if it's a rate limit error
+            if (error.message && error.message.includes('Too Many Requests')) {
+                console.log('Rate limited, using cached data if available');
+                if (stockDataCache.current) {
+                    return res.status(200).json(stockDataCache.current);
+                }
+            }
             console.log('Batch quote failed, fetching individually:', error.message);
             // Fallback: fetch individually
             try {
@@ -41,12 +82,23 @@ module.exports = async (req, res) => {
                             const result = await yahooFinance.quote(symbol);
                             return Array.isArray(result) ? result[0] : result;
                         } catch (err) {
+                            // Check for rate limit
+                            if (err.message && err.message.includes('Too Many Requests')) {
+                                console.log(`Rate limited for ${symbol}`);
+                                return null;
+                            }
                             console.error(`Failed to fetch quote for ${symbol}:`, err.message);
                             return null;
                         }
                     })
                 );
                 quotes = quotes.filter(q => q !== null);
+                
+                // If we got no quotes due to rate limiting, use cache
+                if (quotes.length === 0 && stockDataCache.current) {
+                    console.log('No quotes received (rate limited), using cached data');
+                    return res.status(200).json(stockDataCache.current);
+                }
             } catch (fallbackError) {
                 console.error('All quote fetches failed:', fallbackError);
                 quotes = [];
@@ -142,19 +194,36 @@ module.exports = async (req, res) => {
             return bPercent - aPercent;
         });
         
-        // Cache the results if market is closed
+        // Cache the results if we got valid data (even during market hours)
         const { isMarketOpen, stockDataCache } = require('../utils');
-        if (!isMarketOpen()) {
+        if (results.length > 0 && results.some(r => r.changePercent !== null && r.currentPrice > 0)) {
             stockDataCache.current = results;
             stockDataCache.lastUpdate = Date.now();
-            stockDataCache.marketWasOpen = false;
-            console.log('Market is closed, caching data');
+            stockDataCache.marketWasOpen = isMarketOpen();
+            console.log('Caching valid data');
         }
         
         res.status(200).json(results);
     } catch (error) {
         console.error('Error fetching current stocks:', error);
-        res.status(500).json({ error: 'Failed to fetch stock data', details: error.message });
+        
+        // If we have cached data, return it even on error
+        if (stockDataCache.current) {
+            console.log('Error occurred, returning cached data');
+            return res.status(200).json(stockDataCache.current);
+        }
+        
+        // If no cache, return empty structure so frontend doesn't break
+        const managers = loadManagersFromConfig();
+        res.status(200).json(managers.map(m => ({
+            name: m.name,
+            symbol: m.stockSymbol,
+            currentPrice: 0,
+            changePercent: null,
+            change1d: null,
+            change1m: null,
+            change3m: null
+        })));
     }
 };
 
