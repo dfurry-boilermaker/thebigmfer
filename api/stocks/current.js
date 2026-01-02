@@ -142,6 +142,15 @@ module.exports = async (req, res) => {
             return bPercent - aPercent;
         });
         
+        // Cache the results if market is closed
+        const { isMarketOpen, stockDataCache } = require('../utils');
+        if (!isMarketOpen()) {
+            stockDataCache.current = results;
+            stockDataCache.lastUpdate = Date.now();
+            stockDataCache.marketWasOpen = false;
+            console.log('Market is closed, caching data');
+        }
+        
         res.status(200).json(results);
     } catch (error) {
         console.error('Error fetching current stocks:', error);
