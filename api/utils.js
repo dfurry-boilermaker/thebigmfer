@@ -14,8 +14,10 @@ let stockDataCache = {
 // Check if US stock market is currently open
 function isMarketOpen() {
     const now = new Date();
-    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-    const et = new Date(utc + (-5 * 3600000)); // EST/EDT (simplified, doesn't handle DST perfectly)
+    
+    // Get Eastern Time (handles DST automatically)
+    const etString = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
+    const et = new Date(etString);
     
     const day = et.getDay(); // 0 = Sunday, 6 = Saturday
     const hour = et.getHours();
@@ -31,7 +33,13 @@ function isMarketOpen() {
     const marketOpen = 9 * 60 + 30; // 9:30 AM
     const marketClose = 16 * 60; // 4:00 PM
     
-    return time >= marketOpen && time < marketClose;
+    const isOpen = time >= marketOpen && time < marketClose;
+    
+    if (!isOpen) {
+        console.log(`Market is closed. Current ET time: ${hour}:${minute.toString().padStart(2, '0')}, Day: ${day}`);
+    }
+    
+    return isOpen;
 }
 
 // Check if we should use cached data
