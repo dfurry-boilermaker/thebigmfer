@@ -10,6 +10,14 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static('public'));
 
+// CORS middleware
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    next();
+});
+
 // Load managers from JSON file
 function loadManagersFromConfig() {
     try {
@@ -151,8 +159,8 @@ app.get('/api/stocks/current', async (req, res) => {
                 };
             }
             
-            const currentPrice = quote.regularMarketPrice || quote.price || 0;
-            const previousClose = quote.regularMarketPreviousClose || baselinePrice;
+            const currentPrice = quote.regularMarketPrice || quote.price || quote.regularMarketPreviousClose || 0;
+            const previousClose = quote.regularMarketPreviousClose || baselinePrice || currentPrice;
             
             // Calculate YTD percentage change
             const ytdChange = baselinePrice > 0 
@@ -341,9 +349,15 @@ app.get('/api/stocks/monthly', async (req, res) => {
     }
 });
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // Start server
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     console.log(`Visit http://localhost:${PORT} to view the app`);
+    console.log(`Managers loaded: ${loadManagersFromConfig().length}`);
 });
 
