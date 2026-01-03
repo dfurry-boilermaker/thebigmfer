@@ -4,93 +4,525 @@ const API_BASE = '/api';
 const leaderboard = document.getElementById('leaderboard');
 let performanceChart = null;
 
+// Mock data for testing (hardcoded managers list)
+const MOCK_MANAGERS = [
+    { name: "Daniel", stockSymbol: "NBIS" },
+    { name: "Sam", stockSymbol: "NVDA" },
+    { name: "Szklarek", stockSymbol: "WY" },
+    { name: "Cale", stockSymbol: "NVO" },
+    { name: "Charlie", stockSymbol: "TSLA" },
+    { name: "Kruse", stockSymbol: "AMTM" },
+    { name: "Kyle", stockSymbol: "PLTR" },
+    { name: "Adam", stockSymbol: "JPM" },
+    { name: "Carson", stockSymbol: "AMZN" },
+    { name: "Grant", stockSymbol: "WM" },
+    { name: "Nick", stockSymbol: "PM" },
+    { name: "Pierino", stockSymbol: "CRCL" }
+];
+
+// Generate fake leaderboard data
+function generateMockLeaderboardData() {
+    const today = new Date();
+    const yearStart = new Date(2026, 0, 1);
+    const actualDaysSinceStart = Math.floor((today - yearStart) / (1000 * 60 * 60 * 24));
+    const daysSinceStart = actualDaysSinceStart < 0 ? 14 : Math.max(0, actualDaysSinceStart);
+    
+    // Stock patterns (matching chart patterns) - trend is now annual return multiplier
+    // Best performer (Kyle - PLTR) should reach 110% by end of year
+    // 2 stocks are negative: Charlie (TSLA) and Nick (PM)
+    const stockPatterns = [
+        { base: 0, trend: 0.75, volatility: 0.40, momentum: 0.10 },  // Daniel - NBIS (75% annual)
+        { base: 0, trend: 1.00, volatility: 0.75, momentum: 0.15 },  // Sam - NVDA (100% annual)
+        { base: 0, trend: 0.50, volatility: 0.20, momentum: 0.05 }, // Szklarek - WY (50% annual)
+        { base: 0, trend: 0.90, volatility: 0.30, momentum: 0.125 }, // Cale - NVO (90% annual)
+        { base: 0, trend: -0.20, volatility: 0.60, momentum: -0.05 }, // Charlie - TSLA (-20% annual - NEGATIVE)
+        { base: 0, trend: 0.40, volatility: 0.15, momentum: 0.04 }, // Kruse - AMTM (40% annual)
+        { base: 0, trend: 1.10, volatility: 0.50, momentum: 0.10 },  // Kyle - PLTR (110% annual - best performer)
+        { base: 0, trend: 0.60, volatility: 0.25, momentum: 0.075 }, // Adam - JPM (60% annual)
+        { base: 0, trend: 0.70, volatility: 0.25, momentum: 0.09 }, // Carson - AMZN (70% annual)
+        { base: 0, trend: 0.45, volatility: 0.15, momentum: 0.05 },  // Grant - WM (45% annual)
+        { base: 0, trend: -0.15, volatility: 0.15, momentum: -0.02 }, // Nick - PM (-15% annual - NEGATIVE)
+        { base: 0, trend: 0.80, volatility: 0.35, momentum: 0.10 }   // Pierino - CRCL (80% annual)
+    ];
+    
+    const results = MOCK_MANAGERS.map((manager, index) => {
+        const symbol = manager.stockSymbol;
+        const pattern = stockPatterns[index] || stockPatterns[0];
+        
+        // Calculate YTD percentage based on pattern (less random)
+        // Scale to ensure best performer reaches 100%+ over full year (~252 trading days)
+        // pattern.trend is now a multiplier for annual return (1.10 = 110% annual)
+        const tradingDaysPerYear = 252;
+        const annualReturn = pattern.trend; // e.g., 1.10 = 110%
+        const dailyReturn = annualReturn / tradingDaysPerYear; // Convert to daily
+        const trendComponent = daysSinceStart * dailyReturn;
+        
+        const momentumComponent = daysSinceStart * pattern.momentum / 100;
+        // Reduce volatility by 70% for more consistent data
+        const dailyVolatility = (Math.random() - 0.5) * pattern.volatility * 0.3;
+        const ytdPercent = (pattern.base + trendComponent + momentumComponent + dailyVolatility) * 100;
+        
+        // Calculate mock prices
+        const basePrice = 100;
+        const currentPrice = basePrice * (1 + ytdPercent / 100);
+        
+        // Calculate 1d change (much smaller variation, closer to YTD)
+        const change1d = ytdPercent + (Math.random() - 0.5) * 0.1;
+        
+        // Calculate 1m and 3m (only if enough time has passed)
+        let change1m = null;
+        let change3m = null;
+        
+        if (daysSinceStart >= 30) {
+            const oneMonthTrend = Math.max(0, daysSinceStart - 30) * pattern.trend / 100;
+            const oneMonthMomentum = Math.max(0, daysSinceStart - 30) * pattern.momentum / 100;
+            // Reduce volatility for 1m calculation
+            change1m = (pattern.base + oneMonthTrend + oneMonthMomentum + (Math.random() - 0.5) * pattern.volatility * 0.3) * 100;
+        }
+        
+        if (daysSinceStart >= 90) {
+            const threeMonthTrend = Math.max(0, daysSinceStart - 90) * pattern.trend / 100;
+            const threeMonthMomentum = Math.max(0, daysSinceStart - 90) * pattern.momentum / 100;
+            // Reduce volatility for 3m calculation
+            change3m = (pattern.base + threeMonthTrend + threeMonthMomentum + (Math.random() - 0.5) * pattern.volatility * 0.3) * 100;
+        }
+        
+        return {
+            name: manager.name,
+            symbol: symbol,
+            currentPrice: parseFloat(currentPrice.toFixed(2)),
+            changePercent: parseFloat(ytdPercent.toFixed(2)),
+            change1d: parseFloat(change1d.toFixed(2)),
+            change1m: change1m !== null ? parseFloat(change1m.toFixed(2)) : null,
+            change3m: change3m !== null ? parseFloat(change3m.toFixed(2)) : null
+        };
+    });
+    
+    // Sort by YTD percentage (descending)
+    results.sort((a, b) => {
+        const aPercent = a.changePercent || -Infinity;
+        const bPercent = b.changePercent || -Infinity;
+        return bPercent - aPercent;
+    });
+    
+    return results;
+}
+
+// Generate fake chart data - takes optional leaderboardData to ensure exact match
+function generateMockChartData(leaderboardDataForSync = null) {
+    // Extend mock data to show more of the year (e.g., 6 months into 2026)
+    // This allows the best performing stock to reach 100%+
+    const mockEndDate = new Date(2026, 5, 15); // June 15, 2026
+    
+    const firstTradingDay = new Date(2026, 0, 2); // Jan 2, 2026
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    // Generate month labels
+    const monthLabels = [];
+    const currentMonth = mockEndDate.getMonth();
+    const currentDay = mockEndDate.getDate();
+    for (let i = 0; i < currentMonth; i++) {
+        monthLabels.push(months[i]);
+    }
+    if (currentMonth >= 0) {
+        monthLabels.push(`${months[currentMonth]} ${currentDay}`);
+    }
+    
+    // Stock patterns (same as leaderboard) - scaled up for higher amplitude
+    // 2 stocks are negative: Charlie (TSLA) and Nick (PM)
+    const stockPatterns = [
+        { base: 0, trend: 0.75, volatility: 0.40, momentum: 0.10 },
+        { base: 0, trend: 1.00, volatility: 0.75, momentum: 0.15 },
+        { base: 0, trend: 0.50, volatility: 0.20, momentum: 0.05 },
+        { base: 0, trend: 0.90, volatility: 0.30, momentum: 0.125 },
+        { base: 0, trend: -0.20, volatility: 0.60, momentum: -0.05 }, // Charlie - TSLA (-20% annual - NEGATIVE)
+        { base: 0, trend: 0.40, volatility: 0.15, momentum: 0.04 },
+        { base: 0, trend: 1.10, volatility: 0.50, momentum: 0.10 },
+        { base: 0, trend: 0.60, volatility: 0.25, momentum: 0.075 },
+        { base: 0, trend: 0.70, volatility: 0.25, momentum: 0.09 },
+        { base: 0, trend: 0.45, volatility: 0.15, momentum: 0.05 },
+        { base: 0, trend: -0.15, volatility: 0.15, momentum: -0.02 }, // Nick - PM (-15% annual - NEGATIVE)
+        { base: 0, trend: 0.80, volatility: 0.35, momentum: 0.10 }
+    ];
+    
+    // Generate weekly data points (one per week, Friday close) from Jan 2, 2026 to mock end date
+    const generateWeeklyData = (pattern, startDate, endDate) => {
+        const data = [];
+        const timestamps = [];
+        
+        // Find the first Friday (or start from Jan 2 if it's a Friday)
+        let currentDate = new Date(startDate);
+        const dayOfWeek = currentDate.getDay();
+        // If not Friday, move to next Friday
+        if (dayOfWeek !== 5) {
+            const daysUntilFriday = (5 - dayOfWeek + 7) % 7;
+            currentDate.setDate(currentDate.getDate() + (daysUntilFriday === 0 ? 7 : daysUntilFriday));
+        }
+        
+        let weekCount = 0;
+        const marketCloseHour = 16;
+        
+        while (currentDate <= endDate) {
+            // Calculate actual days since start (same as leaderboard calculation)
+            const daysSinceStart = Math.floor((currentDate - startDate) / (1000 * 60 * 60 * 24));
+            
+            // Scale to ensure best performer reaches 100%+ over full year (~252 trading days)
+            // pattern.trend is now a multiplier for annual return (1.10 = 110% annual)
+            // Use same calculation as leaderboard for consistency
+            const tradingDaysPerYear = 252;
+            const annualReturn = pattern.trend; // e.g., 1.10 = 110%
+            const dailyReturn = annualReturn / tradingDaysPerYear; // Convert to daily
+            const trendComponent = daysSinceStart * dailyReturn;
+            const momentumComponent = daysSinceStart * pattern.momentum / 100;
+            
+            // Generate weekly close price - use week count for pattern
+            const weekSeed = weekCount * 0.1;
+            const randomFactor = (Math.sin(weekSeed) + Math.cos(weekSeed * 1.3)) * 0.3;
+            let weeklyValue = (pattern.base + trendComponent + momentumComponent + randomFactor * pattern.volatility * 0.3) * 100;
+            weeklyValue = parseFloat(weeklyValue.toFixed(2));
+            
+            const weeklyTimestamp = new Date(currentDate);
+            weeklyTimestamp.setHours(marketCloseHour, 0, 0, 0);
+            
+            data.push(weeklyValue);
+            timestamps.push(weeklyTimestamp.getTime());
+            
+            weekCount++;
+            // Move to next Friday
+            currentDate.setDate(currentDate.getDate() + 7);
+        }
+        
+        return { data, timestamps };
+    };
+    
+    // Use provided leaderboard data or generate it
+    const leaderboardData = leaderboardDataForSync || generateMockLeaderboardDataForDate(mockEndDate);
+    const leaderboardMap = {};
+    leaderboardData.forEach(stock => {
+        leaderboardMap[stock.symbol] = stock.changePercent;
+    });
+    
+    const stockData = MOCK_MANAGERS.map((manager, index) => {
+        const symbol = manager.stockSymbol;
+        const pattern = stockPatterns[index] || stockPatterns[0];
+        
+        const { data, timestamps } = generateWeeklyData(pattern, firstTradingDay, mockEndDate);
+        
+        // Replace the last data point with the exact leaderboard YTD value
+        if (data.length > 0 && leaderboardMap[symbol] !== undefined) {
+            data[data.length - 1] = leaderboardMap[symbol];
+        }
+        
+        return {
+            name: manager.name,
+            symbol: symbol,
+            data: data,
+            timestamps: timestamps
+        };
+    });
+    
+    return {
+        months: monthLabels,
+        data: stockData,
+        mockEndDate: mockEndDate // Store end date for leaderboard sync
+    };
+}
+
+// Generate fake leaderboard data for a specific date (to match chart end date)
+function generateMockLeaderboardDataForDate(targetDate) {
+    const yearStart = new Date(2026, 0, 1);
+    const actualDaysSinceStart = Math.floor((targetDate - yearStart) / (1000 * 60 * 60 * 24));
+    const daysSinceStart = actualDaysSinceStart < 0 ? 14 : Math.max(0, actualDaysSinceStart);
+    
+    // Stock patterns (matching chart patterns) - trend is now annual return multiplier
+    // 2 stocks are negative: Charlie (TSLA) and Nick (PM)
+    const stockPatterns = [
+        { base: 0, trend: 0.75, volatility: 0.40, momentum: 0.10 },
+        { base: 0, trend: 1.00, volatility: 0.75, momentum: 0.15 },
+        { base: 0, trend: 0.50, volatility: 0.20, momentum: 0.05 },
+        { base: 0, trend: 0.90, volatility: 0.30, momentum: 0.125 },
+        { base: 0, trend: -0.20, volatility: 0.60, momentum: -0.05 }, // Charlie - TSLA (-20% annual - NEGATIVE)
+        { base: 0, trend: 0.40, volatility: 0.15, momentum: 0.04 },
+        { base: 0, trend: 1.10, volatility: 0.50, momentum: 0.10 },
+        { base: 0, trend: 0.60, volatility: 0.25, momentum: 0.075 },
+        { base: 0, trend: 0.70, volatility: 0.25, momentum: 0.09 },
+        { base: 0, trend: 0.45, volatility: 0.15, momentum: 0.05 },
+        { base: 0, trend: -0.15, volatility: 0.15, momentum: -0.02 }, // Nick - PM (-15% annual - NEGATIVE)
+        { base: 0, trend: 0.80, volatility: 0.35, momentum: 0.10 }
+    ];
+    
+    const results = MOCK_MANAGERS.map((manager, index) => {
+        const symbol = manager.stockSymbol;
+        const pattern = stockPatterns[index] || stockPatterns[0];
+        
+        // Calculate YTD percentage based on pattern (less random)
+        // Scale to ensure best performer reaches 100%+ over full year (~252 trading days)
+        const tradingDaysPerYear = 252;
+        const annualReturn = pattern.trend; // e.g., 1.10 = 110%
+        const dailyReturn = annualReturn / tradingDaysPerYear; // Convert to daily
+        const trendComponent = daysSinceStart * dailyReturn;
+        
+        const momentumComponent = daysSinceStart * pattern.momentum / 100;
+        // Reduce volatility by 70% for more consistent data
+        const dailyVolatility = (Math.random() - 0.5) * pattern.volatility * 0.3;
+        const ytdPercent = (pattern.base + trendComponent + momentumComponent + dailyVolatility) * 100;
+        
+        // Calculate mock prices
+        const basePrice = 100;
+        const currentPrice = basePrice * (1 + ytdPercent / 100);
+        
+        // Calculate 1d change (much smaller variation, closer to YTD)
+        const change1d = ytdPercent + (Math.random() - 0.5) * 0.1;
+        
+        // Calculate 1m and 3m (only if enough time has passed)
+        let change1m = null;
+        let change3m = null;
+        
+        if (daysSinceStart >= 30) {
+            const oneMonthTrend = Math.max(0, daysSinceStart - 30) * dailyReturn;
+            const oneMonthMomentum = Math.max(0, daysSinceStart - 30) * pattern.momentum / 100;
+            change1m = (pattern.base + oneMonthTrend + oneMonthMomentum + (Math.random() - 0.5) * pattern.volatility * 0.3) * 100;
+        }
+        
+        if (daysSinceStart >= 90) {
+            const threeMonthTrend = Math.max(0, daysSinceStart - 90) * dailyReturn;
+            const threeMonthMomentum = Math.max(0, daysSinceStart - 90) * pattern.momentum / 100;
+            change3m = (pattern.base + threeMonthTrend + threeMonthMomentum + (Math.random() - 0.5) * pattern.volatility * 0.3) * 100;
+        }
+        
+        return {
+            name: manager.name,
+            symbol: symbol,
+            currentPrice: parseFloat(currentPrice.toFixed(2)),
+            changePercent: parseFloat(ytdPercent.toFixed(2)),
+            change1d: parseFloat(change1d.toFixed(2)),
+            change1m: change1m !== null ? parseFloat(change1m.toFixed(2)) : null,
+            change3m: change3m !== null ? parseFloat(change3m.toFixed(2)) : null
+        };
+    });
+    
+    // Sort by YTD percentage (descending)
+    results.sort((a, b) => {
+        const aPercent = a.changePercent || -Infinity;
+        const bPercent = b.changePercent || -Infinity;
+        return bPercent - aPercent;
+    });
+    
+    return results;
+}
+
 // Load Leaderboard
+// LocalStorage cache keys
+const CACHE_KEYS = {
+    leaderboard: 'stock_competition_leaderboard',
+    chart: 'stock_competition_chart',
+    leaderboardTimestamp: 'stock_competition_leaderboard_timestamp',
+    chartTimestamp: 'stock_competition_chart_timestamp'
+};
+
+// Cache duration: 15 minutes (same as refresh interval)
+const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes in milliseconds
+
+// Check if cached data is still valid
+function isCacheValid(timestamp) {
+    if (!timestamp) return false;
+    const cacheAge = Date.now() - timestamp;
+    return cacheAge < CACHE_DURATION;
+}
+
+// Get cached data from localStorage
+function getCachedData(key, timestampKey) {
+    try {
+        const cached = localStorage.getItem(key);
+        const timestamp = localStorage.getItem(timestampKey);
+        
+        if (cached && timestamp && isCacheValid(parseInt(timestamp))) {
+            return JSON.parse(cached);
+        }
+    } catch (error) {
+        console.error('Error reading from cache:', error);
+    }
+    return null;
+}
+
+// Store data in localStorage
+function setCachedData(key, timestampKey, data) {
+    try {
+        localStorage.setItem(key, JSON.stringify(data));
+        localStorage.setItem(timestampKey, Date.now().toString());
+    } catch (error) {
+        console.error('Error writing to cache:', error);
+    }
+}
+
 async function loadLeaderboard() {
     try {
-        console.log('Loading leaderboard from:', `${API_BASE}/stocks/current`);
-        const response = await fetch(`${API_BASE}/stocks/current`);
+        const useMock = new URLSearchParams(window.location.search).get('mock') === 'true';
         
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Leaderboard API error:', response.status, errorText);
-            leaderboard.innerHTML = `<div class="error-message">Error ${response.status}: ${errorText || 'Failed to load data'}</div>`;
-            return;
+        // Skip cache for mock data
+        if (!useMock) {
+            // Check cache first
+            const cachedData = getCachedData(CACHE_KEYS.leaderboard, CACHE_KEYS.leaderboardTimestamp);
+            if (cachedData) {
+                console.log('Using cached leaderboard data');
+                renderLeaderboard(cachedData);
+                
+                // Fetch fresh data in background (don't wait for it)
+                fetchLeaderboardInBackground();
+                return;
+            }
         }
         
-        const data = await response.json();
-        console.log('Leaderboard data received:', data.length, 'items');
-        
-        if (!data || data.length === 0) {
-            console.warn('No data received from API');
-            leaderboard.innerHTML = `
-                <div class="empty-state">
-                    <p>No managers found.</p>
-                </div>
-            `;
-            return;
-        }
-        
-        leaderboard.innerHTML = data.map((item, index) => {
-            const rank = index + 1;
-            const rankClass = rank === 1 ? 'first' : rank === 2 ? 'second' : rank === 3 ? 'third' : '';
-            
-            const change1dClass = item.change1d !== null ? (item.change1d >= 0 ? 'positive' : 'negative') : '';
-            const change1mClass = item.change1m !== null ? (item.change1m >= 0 ? 'positive' : 'negative') : '';
-            const change3mClass = item.change3m !== null ? (item.change3m >= 0 ? 'positive' : 'negative') : '';
-            const changeYTDClass = item.changePercent !== null ? (item.changePercent >= 0 ? 'positive' : 'negative') : '';
-
-            return `
-                <div class="leaderboard-item ${rankClass}">
-                    <div class="rank">${rank}</div>
-                    <div class="manager-info">
-                        <span class="manager-name">${escapeHtml(item.name)}</span>
-                        <span class="stock-symbol">${escapeHtml(item.symbol)}</span>
-                        <span class="current-price">$${formatPrice(item.currentPrice)}</span>
-                        <div class="time-periods mobile-only">
-                            <span class="time-period">
-                                <span class="period-label">1d</span>
-                                <span class="period-value ${item.change1d === null ? 'no-data' : change1dClass}">${item.change1d !== null ? getChangeSign(item.change1d) + formatPercent(item.change1d) + '%' : '-'}</span>
-                            </span>
-                            <span class="time-period">
-                                <span class="period-label">1m</span>
-                                <span class="period-value ${item.change1m === null ? 'no-data' : change1mClass}">${item.change1m !== null ? getChangeSign(item.change1m) + formatPercent(item.change1m) + '%' : '-'}</span>
-                            </span>
-                            <span class="time-period">
-                                <span class="period-label">3m</span>
-                                <span class="period-value ${item.change3m === null ? 'no-data' : change3mClass}">${item.change3m !== null ? getChangeSign(item.change3m) + formatPercent(item.change3m) + '%' : '-'}</span>
-                            </span>
-                            <span class="time-period">
-                                <span class="period-label">YTD</span>
-                                <span class="period-value ${item.changePercent === null ? 'no-data' : changeYTDClass}">${item.changePercent !== null ? getChangeSign(item.changePercent) + formatPercent(item.changePercent) + '%' : '-'}</span>
-                            </span>
-                        </div>
-                    </div>
-                    <div class="price-percent-combined">
-                        <div class="time-periods desktop-only">
-                            <span class="time-period">
-                                <span class="period-label">1d</span>
-                                <span class="period-value ${item.change1d === null ? 'no-data' : change1dClass}">${item.change1d !== null ? getChangeSign(item.change1d) + formatPercent(item.change1d) + '%' : '-'}</span>
-                            </span>
-                            <span class="time-period">
-                                <span class="period-label">1m</span>
-                                <span class="period-value ${item.change1m === null ? 'no-data' : change1mClass}">${item.change1m !== null ? getChangeSign(item.change1m) + formatPercent(item.change1m) + '%' : '-'}</span>
-                            </span>
-                            <span class="time-period">
-                                <span class="period-label">3m</span>
-                                <span class="period-value ${item.change3m === null ? 'no-data' : change3mClass}">${item.change3m !== null ? getChangeSign(item.change3m) + formatPercent(item.change3m) + '%' : '-'}</span>
-                            </span>
-                            <span class="time-period">
-                                <span class="period-label">YTD</span>
-                                <span class="period-value ${item.changePercent === null ? 'no-data' : changeYTDClass}">${item.changePercent !== null ? getChangeSign(item.changePercent) + formatPercent(item.changePercent) + '%' : '-'}</span>
-                            </span>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
+        // No valid cache, fetch from API (or generate mock data)
+        await fetchLeaderboardData();
     } catch (error) {
-        leaderboard.innerHTML = `<div class="error-message">Error loading leaderboard: ${error.message}</div>`;
+        console.error('Error loading leaderboard:', error);
+        const useMock = new URLSearchParams(window.location.search).get('mock') === 'true';
+        
+        // Try to use cached data even if expired (unless using mock)
+        if (!useMock) {
+            const cachedData = getCachedData(CACHE_KEYS.leaderboard, CACHE_KEYS.leaderboardTimestamp);
+            if (cachedData) {
+                console.log('Using expired cached data due to error');
+                renderLeaderboard(cachedData);
+                return;
+            }
+        }
+        
+        leaderboard.innerHTML = `<div class="error-message">Failed to load data. Please try again later.</div>`;
     }
+}
+
+// Shared mock data cache to ensure chart and leaderboard use exact same data
+let sharedMockData = null;
+
+async function fetchLeaderboardData() {
+    // Use mock data if ?mock=true is in URL
+    const useMock = new URLSearchParams(window.location.search).get('mock') === 'true';
+    
+    if (useMock) {
+        // Generate fake data directly, no API call
+        // Use shared data if available, otherwise generate it
+        if (!sharedMockData) {
+            const chartEndDate = new Date(2026, 5, 15);
+            sharedMockData = generateMockLeaderboardDataForDate(chartEndDate);
+        }
+        console.log('Using mock leaderboard data (no API call)');
+        renderLeaderboard(sharedMockData);
+        return;
+    }
+    
+    const url = `${API_BASE}/stocks/current`;
+    console.log('Fetching leaderboard from API:', url);
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Leaderboard API error:', response.status, errorText);
+        throw new Error(`API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('Leaderboard data received:', data.length, 'items');
+    
+    // Cache the data
+    setCachedData(CACHE_KEYS.leaderboard, CACHE_KEYS.leaderboardTimestamp, data);
+    
+    // Render the data
+    renderLeaderboard(data);
+}
+
+async function fetchLeaderboardInBackground() {
+    // Silently fetch fresh data in background
+    try {
+        const useMock = new URLSearchParams(window.location.search).get('mock') === 'true';
+        
+        // Don't refresh mock data in background
+        if (useMock) {
+            return;
+        }
+        
+        const url = `${API_BASE}/stocks/current`;
+        const response = await fetch(url);
+        if (response.ok) {
+            const data = await response.json();
+            setCachedData(CACHE_KEYS.leaderboard, CACHE_KEYS.leaderboardTimestamp, data);
+            console.log('Background refresh: leaderboard data updated');
+        }
+    } catch (error) {
+        console.log('Background refresh failed (non-critical):', error.message);
+    }
+}
+
+function renderLeaderboard(data) {
+    if (!data || data.length === 0) {
+        console.warn('No data to render');
+        leaderboard.innerHTML = `
+            <div class="empty-state">
+                <p>No managers found.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    leaderboard.innerHTML = data.map((item, index) => {
+        const rank = index + 1;
+        const rankClass = rank === 1 ? 'first' : rank === 2 ? 'second' : rank === 3 ? 'third' : '';
+        
+        const change1dClass = item.change1d !== null ? (item.change1d >= 0 ? 'positive' : 'negative') : '';
+        const change1mClass = item.change1m !== null ? (item.change1m >= 0 ? 'positive' : 'negative') : '';
+        const change3mClass = item.change3m !== null ? (item.change3m >= 0 ? 'positive' : 'negative') : '';
+        const changeYTDClass = item.changePercent !== null ? (item.changePercent >= 0 ? 'positive' : 'negative') : '';
+
+        return `
+            <div class="leaderboard-item ${rankClass}">
+                <div class="rank">${rank}</div>
+                <div class="manager-info">
+                    <span class="manager-name">${escapeHtml(item.name)}</span>
+                    <span class="stock-symbol">${escapeHtml(item.symbol)}</span>
+                    <span class="current-price">$${formatPrice(item.currentPrice)}</span>
+                    <div class="time-periods mobile-only">
+                        <span class="time-period">
+                            <span class="period-label">1d</span>
+                            <span class="period-value ${item.change1d === null ? 'no-data' : change1dClass}">${item.change1d !== null ? getChangeSign(item.change1d) + formatPercent(item.change1d) + '%' : '-'}</span>
+                        </span>
+                        <span class="time-period">
+                            <span class="period-label">1m</span>
+                            <span class="period-value ${item.change1m === null ? 'no-data' : change1mClass}">${item.change1m !== null ? getChangeSign(item.change1m) + formatPercent(item.change1m) + '%' : '-'}</span>
+                        </span>
+                        <span class="time-period">
+                            <span class="period-label">3m</span>
+                            <span class="period-value ${item.change3m === null ? 'no-data' : change3mClass}">${item.change3m !== null ? getChangeSign(item.change3m) + formatPercent(item.change3m) + '%' : '-'}</span>
+                        </span>
+                        <span class="time-period">
+                            <span class="period-label">YTD</span>
+                            <span class="period-value ${item.changePercent === null ? 'no-data' : changeYTDClass}">${item.changePercent !== null ? getChangeSign(item.changePercent) + formatPercent(item.changePercent) + '%' : '-'}</span>
+                        </span>
+                    </div>
+                </div>
+                <div class="price-percent-combined">
+                    <div class="time-periods desktop-only">
+                        <span class="time-period">
+                            <span class="period-label">1d</span>
+                            <span class="period-value ${item.change1d === null ? 'no-data' : change1dClass}">${item.change1d !== null ? getChangeSign(item.change1d) + formatPercent(item.change1d) + '%' : '-'}</span>
+                        </span>
+                        <span class="time-period">
+                            <span class="period-label">1m</span>
+                            <span class="period-value ${item.change1m === null ? 'no-data' : change1mClass}">${item.change1m !== null ? getChangeSign(item.change1m) + formatPercent(item.change1m) + '%' : '-'}</span>
+                        </span>
+                        <span class="time-period">
+                            <span class="period-label">3m</span>
+                            <span class="period-value ${item.change3m === null ? 'no-data' : change3mClass}">${item.change3m !== null ? getChangeSign(item.change3m) + formatPercent(item.change3m) + '%' : '-'}</span>
+                        </span>
+                        <span class="time-period">
+                            <span class="period-label">YTD</span>
+                            <span class="period-value ${item.changePercent === null ? 'no-data' : changeYTDClass}">${item.changePercent !== null ? getChangeSign(item.changePercent) + formatPercent(item.changePercent) + '%' : '-'}</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
 }
 
 function getChangeSign(value) {
@@ -124,33 +556,117 @@ async function loadChart() {
 
         // Use mock data if ?mock=true is in URL
         const useMock = new URLSearchParams(window.location.search).get('mock') === 'true';
-        const url = `${API_BASE}/stocks/monthly${useMock ? '?mock=true' : ''}`;
-        console.log('Loading chart data from:', url);
         
-        const response = await fetch(url);
+        // Check cache first (unless using mock data)
+        if (!useMock) {
+            const cachedChartData = getCachedData(CACHE_KEYS.chart, CACHE_KEYS.chartTimestamp);
+            const cachedCurrentData = getCachedData(CACHE_KEYS.leaderboard, CACHE_KEYS.leaderboardTimestamp);
+            
+            if (cachedChartData && cachedCurrentData) {
+                console.log('Using cached chart data');
+                renderChart(cachedChartData, cachedCurrentData);
+                
+                // Fetch fresh data in background (don't wait for it)
+                fetchChartInBackground(useMock);
+                return;
+            }
+        }
         
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Chart API error:', response.status, errorText);
+        // No valid cache, fetch from API
+        await fetchChartData(useMock);
+    } catch (error) {
+        console.error('Error loading chart:', error);
+        // Try to use cached data even if expired
+        const cachedChartData = getCachedData(CACHE_KEYS.chart, CACHE_KEYS.chartTimestamp);
+        const cachedCurrentData = getCachedData(CACHE_KEYS.leaderboard, CACHE_KEYS.leaderboardTimestamp);
+        
+        if (cachedChartData && cachedCurrentData) {
+            console.log('Using expired cached data due to error');
+            renderChart(cachedChartData, cachedCurrentData);
+        }
+    }
+}
+
+async function fetchChartData(useMock) {
+    if (useMock) {
+        // Generate fake data directly, no API call
+        console.log('Using mock chart data (no API call)');
+        // Use shared data - generate if not already created
+        if (!sharedMockData) {
+            const endDate = new Date(2026, 5, 15);
+            sharedMockData = generateMockLeaderboardDataForDate(endDate);
+        }
+        const chartData = generateMockChartData(sharedMockData);
+        renderChart(chartData, sharedMockData);
+        return;
+    }
+    
+    const url = `${API_BASE}/stocks/monthly`;
+    console.log('Fetching chart data from API:', url);
+    
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Chart API error:', response.status, errorText);
+        throw new Error(`API error: ${response.status}`);
+    }
+    
+    const chartData = await response.json();
+    console.log('Chart data received:', chartData);
+    
+    // Fetch current stock data to get accurate YTD percentages
+    const currentResponse = await fetch(`${API_BASE}/stocks/current`);
+    const currentData = await currentResponse.json();
+    
+    // Cache the data
+    setCachedData(CACHE_KEYS.chart, CACHE_KEYS.chartTimestamp, chartData);
+    // Current data is already cached by loadLeaderboard, but update it if we got fresh data
+    if (currentData && Array.isArray(currentData) && currentData.length > 0) {
+        setCachedData(CACHE_KEYS.leaderboard, CACHE_KEYS.leaderboardTimestamp, currentData);
+    }
+    
+    // Render the chart
+    renderChart(chartData, currentData);
+}
+
+async function fetchChartInBackground(useMock) {
+    // Silently fetch fresh data in background
+    try {
+        // Don't refresh mock data in background
+        if (useMock) {
             return;
         }
         
-        const chartData = await response.json();
-        console.log('Chart data received:', chartData);
-        
-        // Fetch current stock data to get accurate YTD percentages
-        const currentResponse = await fetch(`${API_BASE}/stocks/current`);
-        const currentData = await currentResponse.json();
-        
-        // Create a map of symbol to YTD percentage for quick lookup
-        const ytdMap = {};
-        if (currentData && Array.isArray(currentData)) {
-            currentData.forEach(stock => {
-                ytdMap[stock.symbol] = stock.changePercent;
-            });
+        const url = `${API_BASE}/stocks/monthly`;
+        const response = await fetch(url);
+        if (response.ok) {
+            const chartData = await response.json();
+            const currentResponse = await fetch(`${API_BASE}/stocks/current`);
+            if (currentResponse.ok) {
+                const currentData = await currentResponse.json();
+                if (!useMock) {
+                    setCachedData(CACHE_KEYS.chart, CACHE_KEYS.chartTimestamp, chartData);
+                    setCachedData(CACHE_KEYS.leaderboard, CACHE_KEYS.leaderboardTimestamp, currentData);
+                    console.log('Background refresh: chart data updated');
+                }
+            }
         }
-        
-        const ctx = document.getElementById('performanceChart');
+    } catch (error) {
+        console.log('Background refresh failed (non-critical):', error.message);
+    }
+}
+
+function renderChart(chartData, currentData) {
+    // Create a map of symbol to YTD percentage for quick lookup
+    const ytdMap = {};
+    if (currentData && Array.isArray(currentData)) {
+        currentData.forEach(stock => {
+            ytdMap[stock.symbol] = stock.changePercent;
+        });
+    }
+    
+    const ctx = document.getElementById('performanceChart');
         if (!ctx) return;
 
         if (performanceChart) {
@@ -355,7 +871,8 @@ async function loadChart() {
                     return null;
                 }
                 
-                // For the last data point, use current YTD if available to ensure accuracy
+                // For the last data point, always use current YTD from leaderboard to ensure accuracy
+                // This ensures chart labels match leaderboard YTD values
                 let yValue = value;
                 if (idx === data.length - 1 && currentYTD !== null && currentYTD !== undefined) {
                     yValue = currentYTD;
@@ -650,6 +1167,8 @@ async function loadChart() {
                         }
                         
                         const x = lastPoint.x;
+                        // Use the Y value from the last point (which should be the leaderboard YTD)
+                        // But prefer leaderboard YTD if available to ensure exact match
                         const y = lastPoint.y;
                         
                         // Get YTD percentage from current stock data (same source as leaderboard)
@@ -657,8 +1176,8 @@ async function loadChart() {
                         const name = labelParts[0] || '';
                         const symbol = labelParts[1] ? labelParts[1].replace(')', '') : '';
                         
-                        // Use YTD from current data (same as leaderboard) instead of chart data
-                        const ytdPercent = ytdMap[symbol] !== undefined ? ytdMap[symbol] : null;
+                        // Always use YTD from leaderboard to ensure exact match
+                        const ytdPercent = ytdMap[symbol] !== undefined ? ytdMap[symbol] : (y !== null && y !== undefined ? y : null);
                         const ytdFormatted = ytdPercent !== null && ytdPercent !== undefined 
                             ? `${ytdPercent >= 0 ? '+' : ''}${ytdPercent.toFixed(1)}%`
                             : 'N/A';
@@ -945,9 +1464,6 @@ async function loadChart() {
                 }
             }]
         });
-    } catch (error) {
-        console.error('Chart error:', error);
-    }
 }
 
 // Handle window resize

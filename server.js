@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const yahooFinance = require('yahoo-finance2').default;
+const { generateMockCurrentData } = require('./api/utils');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -145,6 +146,13 @@ function generateMockChartData() {
 
 // Get current stock prices and performance
 app.get('/api/stocks/current', async (req, res) => {
+    // Check if using mock data
+    const useMock = req.query.mock === 'true';
+    if (useMock) {
+        const mockData = generateMockCurrentData();
+        return res.status(200).json(mockData);
+    }
+    
     try {
         const managers = loadManagersFromConfig();
         const symbols = managers.map(m => m.stockSymbol);
