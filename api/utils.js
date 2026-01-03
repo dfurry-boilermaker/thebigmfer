@@ -1,7 +1,8 @@
 // Shared utility functions for Vercel API routes
 const path = require('path');
 const fs = require('fs');
-const yahooFinance = require('yahoo-finance2').default;
+const YahooFinance = require('yahoo-finance2').default;
+const yahooFinance = new YahooFinance();
 
 // Initialize Vercel Edge Config (read-only)
 // Edge Config connection string is automatically provided by Vercel via EDGE_CONFIG env var

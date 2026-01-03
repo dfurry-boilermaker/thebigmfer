@@ -3,7 +3,8 @@
 // This prevents users from waiting for API calls
 
 const { loadManagersFromConfig, getBaselinePrices, getIntradayData, setCachedStockData, CACHE_KEYS, isMarketOpen, isDuringMarketHours } = require('../utils');
-const yahooFinance = require('yahoo-finance2').default;
+const YahooFinance = require('yahoo-finance2').default;
+const yahooFinance = new YahooFinance();
 
 module.exports = async (req, res) => {
     // Vercel Cron jobs send a specific header
