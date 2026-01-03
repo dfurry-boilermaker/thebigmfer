@@ -1,7 +1,7 @@
 const yahooFinance = require('yahoo-finance2').default;
 const { 
     loadManagersFromConfig, 
-    getHistoricalPrice, 
+    getBaselinePrices, 
     shouldUseCache, 
     getCachedStockData, 
     setCachedStockData, 
@@ -131,12 +131,8 @@ module.exports = async (req, res) => {
             }
         }
         
-        // Get baseline prices (Dec 31, 2025)
-        const baselineDate = '2025-12-31';
-        const baselinePromises = symbols.map(symbol => 
-            getHistoricalPrice(symbol, baselineDate)
-        );
-        const baselinePrices = await Promise.all(baselinePromises);
+        // Get baseline prices (Dec 31, 2025) - uses permanent cache
+        const baselinePrices = await getBaselinePrices(symbols);
         
         // Create a map of symbol to quote
         const quoteMap = {};

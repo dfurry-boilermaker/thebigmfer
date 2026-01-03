@@ -26,10 +26,11 @@ try {
     edgeConfig = null;
 }
 
-// Fallback in-memory cache (used if KV is not available)
+// In-memory cache (primary storage, with Edge Config as read-only backup)
 let stockDataCache = {
     current: null,
     monthly: null,
+    baselinePrices: null, // Dec 31, 2025 prices (permanent cache)
     lastUpdate: null,
     marketWasOpen: false
 };
@@ -39,7 +40,8 @@ const CACHE_KEYS = {
     CURRENT: 'stock:current',
     MONTHLY: 'stock:monthly',
     LAST_UPDATE: 'stock:lastUpdate',
-    MARKET_WAS_OPEN: 'stock:marketWasOpen'
+    MARKET_WAS_OPEN: 'stock:marketWasOpen',
+    BASELINE_PRICES: 'stock:baselinePrices' // Dec 31, 2025 prices (never change)
 };
 
 // Get cached stock data from Vercel Edge Config
@@ -64,6 +66,10 @@ async function getCachedStockData(key) {
             }
         }
     }
+    // Baseline prices are cached permanently (no expiration check)
+    if (key === CACHE_KEYS.BASELINE_PRICES && stockDataCache.baselinePrices) {
+        return stockDataCache.baselinePrices;
+    }
     
     // Try Edge Config (read-only, very fast)
     if (edgeConfig) {
@@ -75,6 +81,7 @@ async function getCachedStockData(key) {
                 // Also update in-memory cache for faster subsequent reads
                 if (key === CACHE_KEYS.CURRENT) stockDataCache.current = parsed;
                 if (key === CACHE_KEYS.MONTHLY) stockDataCache.monthly = parsed;
+                if (key === CACHE_KEYS.BASELINE_PRICES) stockDataCache.baselinePrices = parsed;
                 return parsed;
             }
         } catch (error) {
@@ -85,6 +92,7 @@ async function getCachedStockData(key) {
     // Fallback to in-memory cache (even if expired)
     if (key === CACHE_KEYS.CURRENT) return stockDataCache.current;
     if (key === CACHE_KEYS.MONTHLY) return stockDataCache.monthly;
+    if (key === CACHE_KEYS.BASELINE_PRICES) return stockDataCache.baselinePrices;
     return null;
 }
 
@@ -95,7 +103,12 @@ async function setCachedStockData(key, data, ttlSeconds) {
     // Always update in-memory cache (primary storage)
     if (key === CACHE_KEYS.CURRENT) stockDataCache.current = data;
     if (key === CACHE_KEYS.MONTHLY) stockDataCache.monthly = data;
-    stockDataCache.lastUpdate = Date.now();
+    if (key === CACHE_KEYS.BASELINE_PRICES) stockDataCache.baselinePrices = data;
+    
+    // Only update lastUpdate for time-sensitive data (not baseline prices)
+    if (key !== CACHE_KEYS.BASELINE_PRICES) {
+        stockDataCache.lastUpdate = Date.now();
+    }
     
     // Note: Edge Config writes require Vercel API token (not digest) and are rate-limited
     // We skip writes to Edge Config and rely on in-memory cache as primary
@@ -235,6 +248,44 @@ async function getHistoricalPrice(symbol, targetDate) {
         console.error(`Error fetching historical price for ${symbol}:`, error.message);
         return null;
     }
+}
+
+// Get baseline prices (Dec 31, 2025) with permanent caching
+// These prices never change, so we cache them indefinitely
+async function getBaselinePrices(symbols) {
+    // Check cache first
+    const cachedBaselines = await getCachedStockData(CACHE_KEYS.BASELINE_PRICES);
+    if (cachedBaselines && Object.keys(cachedBaselines).length === symbols.length) {
+        // Verify all symbols are present
+        const allPresent = symbols.every(symbol => cachedBaselines.hasOwnProperty(symbol));
+        if (allPresent) {
+            console.log('Using cached baseline prices');
+            return symbols.map(symbol => cachedBaselines[symbol]);
+        }
+    }
+    
+    // Fetch baseline prices if not cached
+    console.log('Fetching baseline prices (will cache permanently)');
+    const baselineDate = '2025-12-31';
+    const baselinePromises = symbols.map(symbol => 
+        getHistoricalPrice(symbol, baselineDate)
+    );
+    const baselinePrices = await Promise.all(baselinePromises);
+    
+    // Create a map of symbol to price for caching
+    const baselineMap = {};
+    symbols.forEach((symbol, index) => {
+        if (baselinePrices[index] !== null && baselinePrices[index] !== undefined) {
+            baselineMap[symbol] = baselinePrices[index];
+        }
+    });
+    
+    // Cache permanently (use a very long TTL - 1 year = 31536000 seconds)
+    // Edge Config doesn't support permanent storage, but in-memory cache will persist
+    // For Edge Config, we'll use a long TTL and refresh if needed
+    await setCachedStockData(CACHE_KEYS.BASELINE_PRICES, baselineMap, 31536000);
+    
+    return baselinePrices;
 }
 
 // Get intraday/hourly data for a symbol
@@ -544,6 +595,7 @@ function generateMockCurrentData() {
 module.exports = {
     loadManagersFromConfig,
     getHistoricalPrice,
+    getBaselinePrices,
     getIntradayData,
     generateMockChartData,
     generateMockCurrentData,

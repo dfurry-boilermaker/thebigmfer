@@ -2,7 +2,7 @@
 // Runs every 15 minutes during market hours to keep cache fresh
 // This prevents users from waiting for API calls
 
-const { loadManagersFromConfig, getHistoricalPrice, getIntradayData, setCachedStockData, CACHE_KEYS, isMarketOpen, isDuringMarketHours } = require('../utils');
+const { loadManagersFromConfig, getBaselinePrices, getIntradayData, setCachedStockData, CACHE_KEYS, isMarketOpen, isDuringMarketHours } = require('../utils');
 const yahooFinance = require('yahoo-finance2').default;
 
 module.exports = async (req, res) => {
@@ -46,11 +46,8 @@ module.exports = async (req, res) => {
                 quotes = quotes.filter(q => q !== null);
             }
             
-            const baselineDate = '2025-12-31';
-            const baselinePromises = symbols.map(symbol => 
-                getHistoricalPrice(symbol, baselineDate)
-            );
-            const baselinePrices = await Promise.all(baselinePromises);
+            // Get baseline prices (Dec 31, 2025) - uses permanent cache
+            const baselinePrices = await getBaselinePrices(symbols);
             
             const quoteMap = {};
             quotes.forEach(quote => {
