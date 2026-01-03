@@ -1,5 +1,15 @@
 const yahooFinance = require('yahoo-finance2').default;
-const { loadManagersFromConfig, getHistoricalPrice, shouldUseCache, stockDataCache, isMarketOpen } = require('../utils');
+const { 
+    loadManagersFromConfig, 
+    getHistoricalPrice, 
+    shouldUseCache, 
+    getCachedStockData, 
+    setCachedStockData, 
+    getLastUpdate,
+    CACHE_KEYS,
+    isMarketOpen, 
+    generateMockCurrentData 
+} = require('../utils');
 
 module.exports = async (req, res) => {
     // Set CORS headers
@@ -15,10 +25,21 @@ module.exports = async (req, res) => {
         return res.status(405).json({ error: 'Method not allowed' });
     }
     
+    // Check if using mock data
+    const useMock = req.query.mock === 'true';
+    if (useMock) {
+        const mockData = generateMockCurrentData();
+        return res.status(200).json(mockData);
+    }
+    
     // Check if we should use cached data (market is closed or rate limited)
-    if (shouldUseCache() && stockDataCache.current) {
-        console.log('Using cached data');
-        return res.status(200).json(stockDataCache.current);
+    const useCache = await shouldUseCache();
+    if (useCache) {
+        const cachedData = await getCachedStockData(CACHE_KEYS.CURRENT);
+        if (cachedData) {
+            console.log('Using cached data from KV');
+            return res.status(200).json(cachedData);
+        }
     }
     
     try {
@@ -40,9 +61,10 @@ module.exports = async (req, res) => {
         
         // If rate limited and we have cache, use it
         if (isRateLimited) {
-            if (stockDataCache.current) {
+            const cachedData = await getCachedStockData(CACHE_KEYS.CURRENT);
+            if (cachedData) {
                 console.log('Rate limited detected, using cached data');
-                return res.status(200).json(stockDataCache.current);
+                return res.status(200).json(cachedData);
             } else {
                 console.log('Rate limited and no cache available, returning empty data');
                 // Return empty data structure so frontend doesn't break
@@ -69,8 +91,9 @@ module.exports = async (req, res) => {
             // Check if it's a rate limit error
             if (error.message && error.message.includes('Too Many Requests')) {
                 console.log('Rate limited, using cached data if available');
-                if (stockDataCache.current) {
-                    return res.status(200).json(stockDataCache.current);
+                const cachedData = await getCachedStockData(CACHE_KEYS.CURRENT);
+                if (cachedData) {
+                    return res.status(200).json(cachedData);
                 }
             }
             console.log('Batch quote failed, fetching individually:', error.message);
@@ -95,9 +118,12 @@ module.exports = async (req, res) => {
                 quotes = quotes.filter(q => q !== null);
                 
                 // If we got no quotes due to rate limiting, use cache
-                if (quotes.length === 0 && stockDataCache.current) {
-                    console.log('No quotes received (rate limited), using cached data');
-                    return res.status(200).json(stockDataCache.current);
+                if (quotes.length === 0) {
+                    const cachedData = await getCachedStockData(CACHE_KEYS.CURRENT);
+                    if (cachedData) {
+                        console.log('No quotes received (rate limited), using cached data');
+                        return res.status(200).json(cachedData);
+                    }
                 }
             } catch (fallbackError) {
                 console.error('All quote fetches failed:', fallbackError);
@@ -195,12 +221,14 @@ module.exports = async (req, res) => {
         });
         
         // Cache the results if we got valid data (even during market hours)
-        const { isMarketOpen, stockDataCache } = require('../utils');
         if (results.length > 0 && results.some(r => r.changePercent !== null && r.currentPrice > 0)) {
-            stockDataCache.current = results;
-            stockDataCache.lastUpdate = Date.now();
-            stockDataCache.marketWasOpen = isMarketOpen();
-            console.log('Caching valid data');
+            // Calculate TTL based on market hours
+            // During market hours: 15 minutes (900 seconds)
+            // After market hours: 24 hours (86400 seconds)
+            const ttlSeconds = isMarketOpen() ? 900 : 86400;
+            
+            await setCachedStockData(CACHE_KEYS.CURRENT, results, ttlSeconds);
+            console.log(`Caching valid data with TTL: ${ttlSeconds} seconds`);
         }
         
         res.status(200).json(results);
@@ -208,9 +236,10 @@ module.exports = async (req, res) => {
         console.error('Error fetching current stocks:', error);
         
         // If we have cached data, return it even on error
-        if (stockDataCache.current) {
+        const cachedData = await getCachedStockData(CACHE_KEYS.CURRENT);
+        if (cachedData) {
             console.log('Error occurred, returning cached data');
-            return res.status(200).json(stockDataCache.current);
+            return res.status(200).json(cachedData);
         }
         
         // If no cache, return empty structure so frontend doesn't break

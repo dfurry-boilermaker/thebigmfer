@@ -3,13 +3,128 @@ const path = require('path');
 const fs = require('fs');
 const yahooFinance = require('yahoo-finance2').default;
 
-// Cache for stock data when market is closed
+// Initialize Vercel Edge Config (read-only)
+// Edge Config connection string is automatically provided by Vercel via EDGE_CONFIG env var
+// when you link an Edge Config to your project in the Vercel dashboard
+let edgeConfig = null;
+const EDGE_CONFIG_ID = 'ecfg_nihngnn5iudhcegkbld1erbfsfj6';
+const EDGE_CONFIG_DIGEST = '5bf6b008a9ec05f6870c476d10b53211797aa000f95aae344ae60f9b422286da';
+
+try {
+    let connectionString = process.env.EDGE_CONFIG;
+    
+    // Fallback: construct connection string from provided credentials if EDGE_CONFIG not set
+    if (!connectionString) {
+        // Edge Config connection string format: https://edge-config.vercel.com/{id}?token={digest}
+        connectionString = `https://edge-config.vercel.com/${EDGE_CONFIG_ID}?token=${EDGE_CONFIG_DIGEST}`;
+    }
+    
+    edgeConfig = require('@vercel/edge-config').createClient(connectionString);
+    console.log('Vercel Edge Config initialized successfully (read-only)');
+} catch (error) {
+    console.log('Vercel Edge Config initialization failed, using in-memory cache only:', error.message);
+    edgeConfig = null;
+}
+
+// Fallback in-memory cache (used if KV is not available)
 let stockDataCache = {
     current: null,
     monthly: null,
     lastUpdate: null,
     marketWasOpen: false
 };
+
+// Cache key constants
+const CACHE_KEYS = {
+    CURRENT: 'stock:current',
+    MONTHLY: 'stock:monthly',
+    LAST_UPDATE: 'stock:lastUpdate',
+    MARKET_WAS_OPEN: 'stock:marketWasOpen'
+};
+
+// Get cached stock data from Vercel Edge Config
+async function getCachedStockData(key) {
+    // Always check in-memory cache first (fastest)
+    if (key === CACHE_KEYS.CURRENT && stockDataCache.current) {
+        // Check if in-memory cache is still valid
+        if (stockDataCache.lastUpdate) {
+            const cacheAge = Date.now() - stockDataCache.lastUpdate;
+            const maxAge = isMarketOpen() ? 15 * 60 * 1000 : 24 * 60 * 60 * 1000;
+            if (cacheAge < maxAge) {
+                return stockDataCache.current;
+            }
+        }
+    }
+    if (key === CACHE_KEYS.MONTHLY && stockDataCache.monthly) {
+        if (stockDataCache.lastUpdate) {
+            const cacheAge = Date.now() - stockDataCache.lastUpdate;
+            const maxAge = isMarketOpen() ? 15 * 60 * 1000 : 24 * 60 * 60 * 1000;
+            if (cacheAge < maxAge) {
+                return stockDataCache.monthly;
+            }
+        }
+    }
+    
+    // Try Edge Config (read-only, very fast)
+    if (edgeConfig) {
+        try {
+            const data = await edgeConfig.get(key);
+            if (data) {
+                // Edge Config stores JSON strings, parse if needed
+                const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+                // Also update in-memory cache for faster subsequent reads
+                if (key === CACHE_KEYS.CURRENT) stockDataCache.current = parsed;
+                if (key === CACHE_KEYS.MONTHLY) stockDataCache.monthly = parsed;
+                return parsed;
+            }
+        } catch (error) {
+            console.error(`Error getting cache from Edge Config for ${key}:`, error.message);
+        }
+    }
+    
+    // Fallback to in-memory cache (even if expired)
+    if (key === CACHE_KEYS.CURRENT) return stockDataCache.current;
+    if (key === CACHE_KEYS.MONTHLY) return stockDataCache.monthly;
+    return null;
+}
+
+// Set cached stock data (primarily in-memory)
+// Note: Edge Config free tier has 100 writes/month limit, so we use in-memory as primary
+// Edge Config is used only for reads (very fast), writes stay in-memory
+async function setCachedStockData(key, data, ttlSeconds) {
+    // Always update in-memory cache (primary storage)
+    if (key === CACHE_KEYS.CURRENT) stockDataCache.current = data;
+    if (key === CACHE_KEYS.MONTHLY) stockDataCache.monthly = data;
+    stockDataCache.lastUpdate = Date.now();
+    
+    // Note: Edge Config writes require Vercel API token (not digest) and are rate-limited
+    // We skip writes to Edge Config and rely on in-memory cache as primary
+    // Edge Config will be used for reads only (when available from previous writes via dashboard/API)
+}
+
+// Get last update timestamp
+async function getLastUpdate() {
+    // Check in-memory cache first
+    if (stockDataCache.lastUpdate) {
+        return stockDataCache.lastUpdate;
+    }
+    
+    // Try Edge Config
+    if (edgeConfig) {
+        try {
+            const timestamp = await edgeConfig.get(CACHE_KEYS.LAST_UPDATE);
+            if (timestamp) {
+                const parsed = parseInt(timestamp);
+                stockDataCache.lastUpdate = parsed;
+                return parsed;
+            }
+        } catch (error) {
+            console.error('Error getting last update from Edge Config:', error.message);
+        }
+    }
+    
+    return null;
+}
 
 // Check if a specific date/time is during market hours (9:30 AM - 4:00 PM ET, weekdays only)
 function isDuringMarketHours(date) {
@@ -40,13 +155,39 @@ function isMarketOpen() {
     return isDuringMarketHours(new Date());
 }
 
-// Check if we should use cached data
-function shouldUseCache() {
-    // If we have cached data, check cache age
+// Check if we should use cached data (async version for KV)
+async function shouldUseCache() {
+    const lastUpdate = await getLastUpdate();
+    
+    if (!lastUpdate) {
+        return false;
+    }
+    
+    const cacheAge = Date.now() - lastUpdate;
+    
+    // During market hours: use cache if less than 15 minutes old (matches refresh interval)
+    if (isMarketOpen()) {
+        const maxCacheAgeMarketHours = 15 * 60 * 1000; // 15 minutes
+        if (cacheAge < maxCacheAgeMarketHours) {
+            return true;
+        }
+    } else {
+        // Market closed: use cache if less than 24 hours old
+        const maxCacheAge = 24 * 60 * 60 * 1000; // 24 hours
+        if (cacheAge < maxCacheAge) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+// Synchronous version for backward compatibility (checks in-memory cache only)
+function shouldUseCacheSync() {
     if (stockDataCache.current && stockDataCache.lastUpdate) {
         const cacheAge = Date.now() - stockDataCache.lastUpdate;
         
-        // During market hours: use cache if less than 15 minutes old (matches refresh interval)
+        // During market hours: use cache if less than 15 minutes old
         if (isMarketOpen()) {
             const maxCacheAgeMarketHours = 15 * 60 * 1000; // 15 minutes
             if (cacheAge < maxCacheAgeMarketHours) {
@@ -179,70 +320,131 @@ async function getIntradayData(symbol, startDate, endDate, interval = '1h') {
     }
 }
 
-// Generate mock chart data
+// Generate mock chart data with hourly granularity
 function generateMockChartData() {
     const managers = loadManagersFromConfig();
     
-    // Mock data goes up to July 17, 2026
-    const mockEndMonth = 6; // July (0-indexed)
-    const mockEndDay = 17;
+    // Mock data goes up to today (or a recent date)
+    const today = new Date();
+    const mockEndDate = new Date(today);
+    // For demo purposes, set to a future date (e.g., 2 weeks from now)
+    mockEndDate.setDate(mockEndDate.getDate() + 14);
     
+    const firstTradingDay = new Date(2026, 0, 2); // Jan 2, 2026
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    // Generate month labels
     const monthLabels = [];
-    for (let i = 0; i <= mockEndMonth; i++) {
+    const currentMonth = mockEndDate.getMonth();
+    const currentDay = mockEndDate.getDate();
+    for (let i = 0; i < currentMonth; i++) {
         monthLabels.push(months[i]);
     }
+    if (currentMonth >= 0) {
+        monthLabels.push(`${months[currentMonth]} ${currentDay}`);
+    }
     
-    // Define unique performance patterns for each stock
-    // Each pattern represents month-end values for Jan-Jun, then daily values for July
+    // Define unique performance patterns for each stock with realistic characteristics
     const stockPatterns = [
-        // Daniel - NBIS: Strong start, then moderate growth
-        { jan: 8.5, feb: 12.3, mar: 10.8, apr: 14.2, may: 18.6, jun: 16.4, july: [17.1, 17.8, 18.2, 18.9, 19.5, 19.1, 18.7, 19.0, 18.4, 19.2, 18.9, 18.6] },
-        // Sam - NVDA: Volatile tech stock with big swings
-        { jan: 15.2, feb: 22.1, mar: 18.5, apr: 25.3, may: 28.7, jun: 24.9, july: [25.6, 26.2, 25.1, 27.3, 28.1, 27.5, 26.8, 27.2, 26.4, 27.8, 27.1, 26.7] },
-        // Szklarek - WY: Steady consistent growth
-        { jan: 5.2, feb: 8.1, mar: 9.5, apr: 11.8, may: 13.4, jun: 12.6, july: [13.1, 13.5, 13.8, 14.2, 14.6, 14.3, 14.0, 14.4, 14.1, 14.7, 14.4, 14.2] },
-        // Cale - NVO: Strong upward trend
-        { jan: 12.8, feb: 16.4, mar: 19.2, apr: 22.6, may: 26.3, jun: 24.8, july: [25.4, 26.1, 26.7, 27.3, 28.0, 27.6, 27.2, 27.5, 27.0, 27.8, 27.4, 27.1] },
-        // Charlie - TSLA: High volatility, big moves
-        { jan: -3.2, feb: 2.5, mar: -1.8, apr: 5.2, may: 9.8, jun: 7.4, july: [8.1, 8.9, 8.3, 9.5, 10.2, 9.7, 9.2, 9.6, 9.0, 10.1, 9.5, 9.2] },
-        // Kruse - AMTM: Slow and steady
-        { jan: 3.1, feb: 5.8, mar: 7.2, apr: 8.9, may: 10.5, jun: 9.8, july: [10.2, 10.6, 10.9, 11.3, 11.7, 11.4, 11.1, 11.5, 11.2, 11.8, 11.5, 11.3] },
-        // Kyle - PLTR: Tech growth with corrections
-        { jan: 18.5, feb: 24.2, mar: 20.8, apr: 27.1, may: 31.5, jun: 28.3, july: [29.1, 29.8, 29.2, 30.4, 31.2, 30.6, 30.1, 30.5, 29.9, 31.1, 30.4, 30.0] },
-        // Adam - JPM: Financial sector, moderate growth
-        { jan: 6.8, feb: 9.5, mar: 11.2, apr: 13.8, may: 16.4, jun: 15.1, july: [15.7, 16.2, 16.6, 17.1, 17.6, 17.3, 17.0, 17.4, 16.9, 17.7, 17.3, 17.0] },
-        // Carson - AMZN: E-commerce giant, steady climb
-        { jan: 9.2, feb: 13.1, mar: 15.8, apr: 18.4, may: 21.7, jun: 20.2, july: [20.9, 21.5, 22.0, 22.6, 23.2, 22.8, 22.4, 22.7, 22.2, 23.0, 22.5, 22.2] },
-        // Grant - WM: Waste management, stable
-        { jan: 4.5, feb: 7.2, mar: 8.6, apr: 10.3, may: 12.1, jun: 11.4, july: [11.9, 12.3, 12.6, 13.0, 13.4, 13.1, 12.8, 13.2, 12.9, 13.5, 13.2, 13.0] },
-        // Nick - PM: Tobacco, defensive play
-        { jan: 2.8, feb: 5.1, mar: 6.4, apr: 7.9, may: 9.3, jun: 8.7, july: [9.1, 9.5, 9.8, 10.2, 10.6, 10.3, 10.0, 10.4, 10.1, 10.7, 10.4, 10.2] },
-        // Pierino - CRCL: Circular economy, growth potential
-        { jan: 11.5, feb: 14.8, mar: 13.2, apr: 16.5, may: 19.2, jun: 17.8, july: [18.4, 19.1, 18.7, 19.8, 20.5, 20.1, 19.6, 20.0, 19.4, 20.6, 20.2, 19.9] }
+        // Daniel - NBIS: Strong start, then moderate growth with some volatility
+        { base: 0, trend: 0.15, volatility: 0.08, momentum: 0.02 },
+        // Sam - NVDA: High volatility tech stock with big swings
+        { base: 0, trend: 0.20, volatility: 0.15, momentum: 0.03 },
+        // Szklarek - WY: Steady consistent growth, low volatility
+        { base: 0, trend: 0.10, volatility: 0.04, momentum: 0.01 },
+        // Cale - NVO: Strong upward trend with moderate volatility
+        { base: 0, trend: 0.18, volatility: 0.06, momentum: 0.025 },
+        // Charlie - TSLA: High volatility, big moves, some negative periods
+        { base: 0, trend: 0.08, volatility: 0.12, momentum: -0.01 },
+        // Kruse - AMTM: Slow and steady, very low volatility
+        { base: 0, trend: 0.08, volatility: 0.03, momentum: 0.008 },
+        // Kyle - PLTR: Tech growth with corrections, high volatility
+        { base: 0, trend: 0.22, volatility: 0.10, momentum: 0.02 },
+        // Adam - JPM: Financial sector, moderate growth, moderate volatility
+        { base: 0, trend: 0.12, volatility: 0.05, momentum: 0.015 },
+        // Carson - AMZN: E-commerce giant, steady climb, low volatility
+        { base: 0, trend: 0.14, volatility: 0.05, momentum: 0.018 },
+        // Grant - WM: Waste management, stable, very low volatility
+        { base: 0, trend: 0.09, volatility: 0.03, momentum: 0.01 },
+        // Nick - PM: Tobacco, defensive play, low volatility
+        { base: 0, trend: 0.07, volatility: 0.03, momentum: 0.008 },
+        // Pierino - CRCL: Circular economy, growth potential, moderate volatility
+        { base: 0, trend: 0.16, volatility: 0.07, momentum: 0.02 }
     ];
+    
+    // Generate daily data with open and close prices (2 points per trading day)
+    const generateDailyData = (pattern, startDate, endDate) => {
+        const data = [];
+        const timestamps = [];
+        
+        let currentDate = new Date(startDate);
+        let currentValue = pattern.base;
+        let dayCount = 0;
+        
+        // Market hours: 9:30 AM - 4:00 PM ET
+        const marketOpenHour = 9;
+        const marketOpenMinute = 30;
+        const marketCloseHour = 16;
+        
+        while (currentDate <= endDate) {
+            const dayOfWeek = currentDate.getDay();
+            
+            // Only include weekdays (Monday = 1, Friday = 5)
+            if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                // Calculate base value for this day with trend, momentum, and volatility
+                const daysSinceStart = dayCount;
+                const trendComponent = daysSinceStart * pattern.trend / 100;
+                const momentumComponent = daysSinceStart * pattern.momentum / 100;
+                const dailyVolatility = (Math.random() - 0.5) * pattern.volatility;
+                
+                const baseValue = pattern.base + trendComponent + momentumComponent + dailyVolatility;
+                
+                // Open price: base value with small random variation
+                const openVariation = (Math.random() - 0.5) * pattern.volatility * 0.2;
+                const openPrice = baseValue + openVariation;
+                
+                // Close price: open price with intraday movement (can be up or down)
+                const intradayMove = (Math.random() - 0.5) * pattern.volatility * 0.8; // Larger variation for close
+                const closePrice = openPrice + intradayMove;
+                
+                // Open price timestamp (9:30 AM)
+                const openTimestamp = new Date(currentDate);
+                openTimestamp.setHours(marketOpenHour, marketOpenMinute, 0, 0);
+                
+                // Close price timestamp (4:00 PM)
+                const closeTimestamp = new Date(currentDate);
+                closeTimestamp.setHours(marketCloseHour, 0, 0, 0);
+                
+                // Add open price
+                data.push(parseFloat(openPrice.toFixed(2)));
+                timestamps.push(openTimestamp.getTime());
+                
+                // Add close price
+                data.push(parseFloat(closePrice.toFixed(2)));
+                timestamps.push(closeTimestamp.getTime());
+                
+                dayCount++;
+            }
+            
+            // Move to next day
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+        
+        return { data, timestamps };
+    };
     
     // Generate mock performance data for each stock
     const stockData = managers.map((manager, index) => {
         const symbol = manager.stockSymbol;
-        const pattern = stockPatterns[index] || stockPatterns[0]; // Fallback to first pattern
-        const data = [0]; // Start at 0% (baseline Dec 31, 2025)
+        const pattern = stockPatterns[index] || stockPatterns[0];
         
-        // Add month-end values for Jan-Jun
-        data.push(pattern.jan);
-        data.push(pattern.feb);
-        data.push(pattern.mar);
-        data.push(pattern.apr);
-        data.push(pattern.may);
-        data.push(pattern.jun);
-        
-        // Add daily data for July (up to July 17 = 12 trading days)
-        data.push(...pattern.july);
+        const { data, timestamps } = generateDailyData(pattern, firstTradingDay, mockEndDate);
         
         return {
             name: manager.name,
             symbol: symbol,
-            data: data
+            data: data,
+            timestamps: timestamps
         };
     });
     
@@ -252,14 +454,107 @@ function generateMockChartData() {
     };
 }
 
+// Generate mock current stock data for leaderboard
+// This should match the latest values from the mock chart data
+function generateMockCurrentData() {
+    const managers = loadManagersFromConfig();
+    const today = new Date();
+    
+    // Calculate approximate YTD values based on the chart data patterns
+    // These are derived from the stock patterns and current date
+    // For mock data, simulate being a few weeks into 2026
+    const yearStart = new Date(2026, 0, 1);
+    const actualDaysSinceStart = Math.floor((today - yearStart) / (1000 * 60 * 60 * 24));
+    // If we're before 2026, use a simulated number of days (e.g., 14 days into 2026)
+    const daysSinceStart = actualDaysSinceStart < 0 ? 14 : Math.max(0, actualDaysSinceStart);
+    
+    // Stock patterns (same as in generateMockChartData)
+    const stockPatterns = [
+        { base: 0, trend: 0.15, volatility: 0.08, momentum: 0.02 },  // Daniel - NBIS
+        { base: 0, trend: 0.20, volatility: 0.15, momentum: 0.03 },  // Sam - NVDA
+        { base: 0, trend: 0.10, volatility: 0.04, momentum: 0.01 }, // Szklarek - WY
+        { base: 0, trend: 0.18, volatility: 0.06, momentum: 0.025 }, // Cale - NVO
+        { base: 0, trend: 0.08, volatility: 0.12, momentum: -0.01 }, // Charlie - TSLA
+        { base: 0, trend: 0.08, volatility: 0.03, momentum: 0.008 }, // Kruse - AMTM
+        { base: 0, trend: 0.22, volatility: 0.10, momentum: 0.02 },  // Kyle - PLTR
+        { base: 0, trend: 0.12, volatility: 0.05, momentum: 0.015 }, // Adam - JPM
+        { base: 0, trend: 0.14, volatility: 0.05, momentum: 0.018 }, // Carson - AMZN
+        { base: 0, trend: 0.09, volatility: 0.03, momentum: 0.01 },  // Grant - WM
+        { base: 0, trend: 0.07, volatility: 0.03, momentum: 0.008 }, // Nick - PM
+        { base: 0, trend: 0.16, volatility: 0.07, momentum: 0.02 }   // Pierino - CRCL
+    ];
+    
+    // Generate mock data for each manager
+    const results = managers.map((manager, index) => {
+        const symbol = manager.stockSymbol;
+        const pattern = stockPatterns[index] || stockPatterns[0];
+        
+        // Calculate YTD percentage based on pattern
+        const trendComponent = daysSinceStart * pattern.trend / 100;
+        const momentumComponent = daysSinceStart * pattern.momentum / 100;
+        const dailyVolatility = (Math.random() - 0.5) * pattern.volatility;
+        const ytdPercent = pattern.base + trendComponent + momentumComponent + dailyVolatility;
+        
+        // Calculate mock prices (using a base price and YTD change)
+        const basePrice = 100; // Base price for calculation
+        const currentPrice = basePrice * (1 + ytdPercent / 100);
+        
+        // Calculate 1d change (small variation from YTD, typically close to YTD early in year)
+        const change1d = ytdPercent + (Math.random() - 0.5) * 0.3;
+        
+        // Calculate 1m and 3m (only if enough time has passed)
+        let change1m = null;
+        let change3m = null;
+        
+        if (daysSinceStart >= 30) {
+            // Approximate 1m as slightly less than YTD (since we're early in the year)
+            const oneMonthTrend = Math.max(0, daysSinceStart - 30) * pattern.trend / 100;
+            const oneMonthMomentum = Math.max(0, daysSinceStart - 30) * pattern.momentum / 100;
+            change1m = pattern.base + oneMonthTrend + oneMonthMomentum + (Math.random() - 0.5) * pattern.volatility;
+        }
+        
+        if (daysSinceStart >= 90) {
+            // Approximate 3m as proportionally less than YTD
+            const threeMonthTrend = Math.max(0, daysSinceStart - 90) * pattern.trend / 100;
+            const threeMonthMomentum = Math.max(0, daysSinceStart - 90) * pattern.momentum / 100;
+            change3m = pattern.base + threeMonthTrend + threeMonthMomentum + (Math.random() - 0.5) * pattern.volatility;
+        }
+        
+        return {
+            name: manager.name,
+            symbol: symbol,
+            currentPrice: parseFloat(currentPrice.toFixed(2)),
+            changePercent: parseFloat(ytdPercent.toFixed(2)),
+            change1d: parseFloat(change1d.toFixed(2)),
+            change1m: change1m !== null ? parseFloat(change1m.toFixed(2)) : null,
+            change3m: change3m !== null ? parseFloat(change3m.toFixed(2)) : null
+        };
+    });
+    
+    // Sort by YTD percentage (descending)
+    results.sort((a, b) => {
+        const aPercent = a.changePercent || -Infinity;
+        const bPercent = b.changePercent || -Infinity;
+        return bPercent - aPercent;
+    });
+    
+    return results;
+}
+
 module.exports = {
     loadManagersFromConfig,
     getHistoricalPrice,
     getIntradayData,
     generateMockChartData,
+    generateMockCurrentData,
     isMarketOpen,
     isDuringMarketHours,
     shouldUseCache,
+    shouldUseCacheSync,
+    getCachedStockData,
+    setCachedStockData,
+    getLastUpdate,
+    CACHE_KEYS,
     stockDataCache
 };
 
