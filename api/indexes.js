@@ -1,6 +1,6 @@
 const YahooFinance = require('yahoo-finance2').default;
 const yahooFinance = new YahooFinance();
-const { getHistoricalPrice } = require('./utils');
+const { getBaselinePrices } = require('./utils');
 
 module.exports = async (req, res) => {
     // Set CORS headers
@@ -23,15 +23,18 @@ module.exports = async (req, res) => {
             { symbol: 'DX-Y.NYB', name: 'US Dollar' }
         ];
         
-        // Baseline date: Dec 31, 2025 (last trading day of 2025 for 2026 YTD calculation)
-        const baselineDate = '2025-12-31';
+        // Get baseline prices using the same method as stocks (Dec 31, 2025)
+        // This ensures consistency and proper caching
+        const indexSymbols = indexes.map(idx => idx.symbol);
+        const baselinePrices = await getBaselinePrices(indexSymbols);
         
-        // Fetch current quotes and baseline prices
-        const results = await Promise.all(indexes.map(async (index) => {
+        // Fetch current quotes
+        const results = await Promise.all(indexes.map(async (index, indexIdx) => {
             try {
                 // Fetch current quote
                 const quote = await yahooFinance.quote(index.symbol);
                 const currentQuote = Array.isArray(quote) ? quote[0] : quote;
+                const baselinePrice = baselinePrices[indexIdx];
                 
                 if (!currentQuote) {
                     console.error(`${index.symbol}: No quote data available`);
@@ -42,28 +45,6 @@ module.exports = async (req, res) => {
                         changePercent: null,
                         change1d: null
                     };
-                }
-                
-                // Get baseline price from Dec 31, 2025
-                let baselinePrice = await getHistoricalPrice(index.symbol, baselineDate);
-                
-                // If Dec 31, 2025 doesn't work (holiday/weekend), get the last trading day of December 2025
-                if (!baselinePrice) {
-                    console.warn(`${index.symbol}: Dec 31, 2025 not available, trying to get last trading day of Dec 2025`);
-                    try {
-                        const historical = await yahooFinance.historical(index.symbol, {
-                            period1: Math.floor(new Date('2025-12-01').getTime() / 1000),
-                            period2: Math.floor(new Date('2025-12-31').getTime() / 1000) + 86400,
-                        });
-                        if (historical && historical.length > 0) {
-                            // Sort by date and get the last entry (last trading day of December)
-                            historical.sort((a, b) => new Date(a.date) - new Date(b.date));
-                            baselinePrice = historical[historical.length - 1].close;
-                            console.log(`${index.symbol}: Using last trading day of Dec 2025: ${historical[historical.length - 1].date}, price: ${baselinePrice}`);
-                        }
-                    } catch (err) {
-                        console.error(`${index.symbol}: Could not get baseline from December 2025:`, err.message);
-                    }
                 }
                 
                 if (!baselinePrice) {
@@ -77,15 +58,11 @@ module.exports = async (req, res) => {
                     };
                 }
                 
-                // Get current price - prioritize regularMarketPrice (current market price)
-                // If market is closed, use regularMarketPreviousClose (last close)
-                let currentPrice = currentQuote.regularMarketPrice;
-                if (!currentPrice || currentPrice === 0) {
-                    currentPrice = currentQuote.price;
-                }
-                if (!currentPrice || currentPrice === 0) {
-                    currentPrice = currentQuote.regularMarketPreviousClose;
-                }
+                // Get current price - use same logic as stocks endpoint
+                // Prioritize regularMarketPrice (current market price)
+                const currentPrice = currentQuote.regularMarketPrice || currentQuote.price || currentQuote.regularMarketPreviousClose || 0;
+                const previousClose = currentQuote.regularMarketPreviousClose || baselinePrice || currentPrice;
+                
                 if (!currentPrice || currentPrice === 0) {
                     console.error(`${index.symbol}: No valid current price found`);
                     return {
@@ -98,21 +75,27 @@ module.exports = async (req, res) => {
                 }
                 
                 // Calculate YTD percentage change for 2026
+                // Use the same calculation as stocks (price appreciation only, no dividends for indexes)
                 // Formula: ((Current Price - Baseline Price) / Baseline Price) * 100
-                const ytdChange = ((currentPrice - baselinePrice) / baselinePrice) * 100;
+                const ytdChange = baselinePrice > 0 
+                    ? ((currentPrice - baselinePrice) / baselinePrice) * 100 
+                    : 0;
                 
-                // Calculate 1d change
-                const previousClose = currentQuote.regularMarketPreviousClose;
+                // Calculate 1d change - use same logic as stocks
                 let change1d = null;
-                if (previousClose && previousClose > 0 && previousClose !== currentPrice) {
+                if (previousClose && previousClose > 0) {
                     change1d = ((currentPrice - previousClose) / previousClose) * 100;
+                } else if (baselinePrice && baselinePrice > 0) {
+                    // Use baseline if previousClose not available (first trading day)
+                    change1d = ((currentPrice - baselinePrice) / baselinePrice) * 100;
                 }
                 
                 // Detailed logging for debugging
                 console.log(`\n=== ${index.symbol} (${index.name}) YTD Calculation ===`);
-                console.log(`Baseline Date: ${baselineDate}`);
+                console.log(`Baseline Date: Dec 31, 2025 (or last trading day of 2025)`);
                 console.log(`Baseline Price: ${baselinePrice}`);
                 console.log(`Current Price: ${currentPrice}`);
+                console.log(`Previous Close: ${previousClose}`);
                 console.log(`YTD Change: ${ytdChange.toFixed(4)}%`);
                 console.log(`Calculation: (${currentPrice} - ${baselinePrice}) / ${baselinePrice} * 100 = ${ytdChange.toFixed(4)}%`);
                 if (change1d !== null) {
