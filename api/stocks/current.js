@@ -77,7 +77,8 @@ module.exports = async (req, res) => {
                     changePercent: null,
                     change1d: null,
                     change1m: null,
-                    change3m: null
+                    change3m: null,
+                    analysis: m.analysis || null
                 })));
             }
         }
@@ -155,7 +156,8 @@ module.exports = async (req, res) => {
                     changePercent: null,
                     change1d: null,
                     change1m: null,
-                    change3m: null
+                    change3m: null,
+                    analysis: manager.analysis || null // Include analysis even when no quote
                 };
             }
             
@@ -206,7 +208,8 @@ module.exports = async (req, res) => {
                 changePercent: ytdChange,
                 change1d: change1d,
                 change1m: change1m,
-                change3m: change3m
+                change3m: change3m,
+                analysis: manager.analysis || null // Include analysis from managers.json
             };
         });
         

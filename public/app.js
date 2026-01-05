@@ -95,7 +95,8 @@ function generateMockLeaderboardData() {
             changePercent: parseFloat(ytdPercent.toFixed(2)),
             change1d: parseFloat(change1d.toFixed(2)),
             change1m: change1m !== null ? parseFloat(change1m.toFixed(2)) : null,
-            change3m: change3m !== null ? parseFloat(change3m.toFixed(2)) : null
+            change3m: change3m !== null ? parseFloat(change3m.toFixed(2)) : null,
+            analysis: manager.analysis || null // Include analysis from MOCK_MANAGERS
         };
     });
     
@@ -344,7 +345,8 @@ function generateMockLeaderboardDataForDate(targetDate) {
             changePercent: parseFloat(ytdPercent.toFixed(2)),
             change1d: parseFloat(change1d.toFixed(2)),
             change1m: change1m !== null ? parseFloat(change1m.toFixed(2)) : null,
-            change3m: change3m !== null ? parseFloat(change3m.toFixed(2)) : null
+            change3m: change3m !== null ? parseFloat(change3m.toFixed(2)) : null,
+            analysis: manager.analysis || null // Include analysis from MOCK_MANAGERS
         };
     });
     
@@ -404,9 +406,6 @@ function setCachedData(key, timestampKey, data) {
 
 async function loadLeaderboard() {
     try {
-        // Always fetch analyses first (needed for rendering dropdowns)
-        await fetchManagerAnalyses();
-        
         const useMock = new URLSearchParams(window.location.search).get('mock') === 'true';
         
         // Skip cache for mock data
@@ -415,8 +414,8 @@ async function loadLeaderboard() {
             const cachedData = getCachedData(CACHE_KEYS.leaderboard, CACHE_KEYS.leaderboardTimestamp);
             if (cachedData) {
                 console.log('Using cached leaderboard data');
-                // Ensure analyses are loaded before rendering (they're needed for hasAnalysis check)
-                await fetchManagerAnalyses();
+                // Extract analyses from cached data
+                managerAnalyses = extractAnalysesFromLeaderboardData(cachedData);
                 renderLeaderboard(cachedData);
                 
                 // Fetch fresh data in background (don't wait for it)
@@ -436,6 +435,7 @@ async function loadLeaderboard() {
             const cachedData = getCachedData(CACHE_KEYS.leaderboard, CACHE_KEYS.leaderboardTimestamp);
             if (cachedData) {
                 console.log('Using expired cached data due to error');
+                managerAnalyses = extractAnalysesFromLeaderboardData(cachedData);
                 renderLeaderboard(cachedData);
                 return;
             }
@@ -449,32 +449,35 @@ async function loadLeaderboard() {
 let sharedMockData = null;
 
 // Fetch manager analyses
-async function fetchManagerAnalyses() {
-    try {
-        const url = `${API_BASE}/analyses`;
-        console.log('Fetching manager analyses from:', url);
-        const response = await fetch(url);
-        if (response.ok) {
-            const data = await response.json();
-            managerAnalyses = data.analyses || {};
-            console.log('Manager analyses loaded:', Object.keys(managerAnalyses).length, 'analyses');
-            console.log('Analyses data:', managerAnalyses);
-        } else {
-            console.error('Failed to fetch analyses, status:', response.status, response.statusText);
-            const errorText = await response.text().catch(() => '');
-            console.error('Error response:', errorText);
-            managerAnalyses = {};
-        }
-    } catch (error) {
-        console.error('Failed to load manager analyses:', error.message, error);
-        managerAnalyses = {};
+// Extract analyses from leaderboard data (analyses are now included in the API response)
+function extractAnalysesFromLeaderboardData(data) {
+    if (!data || !Array.isArray(data)) {
+        console.warn('extractAnalysesFromLeaderboardData: Invalid data', data);
+        return {};
     }
+    
+    const analyses = {};
+    data.forEach(item => {
+        if (item && item.name) {
+            // Check if analysis exists and is not the placeholder text
+            if (item.analysis && 
+                typeof item.analysis === 'string' && 
+                item.analysis.trim() !== '' && 
+                item.analysis !== 'Your analysis here. Explain why you picked ' + item.symbol + ' and your investment thesis in a couple of sentences.') {
+                analyses[item.name] = {
+                    stockSymbol: item.symbol,
+                    analysis: item.analysis
+                };
+            }
+        }
+    });
+    
+    console.log('Extracted analyses from leaderboard data:', Object.keys(analyses).length, 'analyses');
+    console.log('Analyses extracted:', analyses);
+    return analyses;
 }
 
 async function fetchLeaderboardData() {
-    // Fetch analyses first (needed for rendering)
-    await fetchManagerAnalyses();
-    
     // Use mock data if ?mock=true is in URL
     const useMock = new URLSearchParams(window.location.search).get('mock') === 'true';
     
@@ -486,6 +489,8 @@ async function fetchLeaderboardData() {
             sharedMockData = generateMockLeaderboardDataForDate(chartEndDate);
         }
         console.log('Using mock leaderboard data (no API call)');
+        // Extract analyses from mock data
+        managerAnalyses = extractAnalysesFromLeaderboardData(sharedMockData);
         renderLeaderboard(sharedMockData);
         return;
     }
@@ -502,7 +507,10 @@ async function fetchLeaderboardData() {
     
     const data = await response.json();
     console.log('Leaderboard data received:', data.length, 'items');
-    console.log('Manager analyses available:', Object.keys(managerAnalyses).length, 'analyses');
+    
+    // Extract analyses from the API response (analyses are now included in the response)
+    managerAnalyses = extractAnalysesFromLeaderboardData(data);
+    console.log('Manager analyses extracted:', Object.keys(managerAnalyses).length, 'analyses');
     
     // Cache the data
     setCachedData(CACHE_KEYS.leaderboard, CACHE_KEYS.leaderboardTimestamp, data);
@@ -544,6 +552,9 @@ function renderLeaderboard(data) {
         return;
     }
     
+    console.log('Rendering leaderboard with', data.length, 'items');
+    console.log('Manager analyses available:', Object.keys(managerAnalyses).length);
+    
     leaderboard.innerHTML = data.map((item, index) => {
         const rank = index + 1;
         const rankClass = rank === 1 ? 'first' : rank === 2 ? 'second' : rank === 3 ? 'third' : '';
@@ -554,19 +565,22 @@ function renderLeaderboard(data) {
         const changeYTDClass = item.changePercent !== null ? (item.changePercent >= 0 ? 'positive' : 'negative') : '';
 
         // Get analysis for this manager
-        const analysis = managerAnalyses[item.name];
+        // First check if analysis is directly on the item (from API), otherwise check managerAnalyses
+        let analysis = null;
+        if (item.analysis && typeof item.analysis === 'string' && item.analysis.trim() !== '') {
+            // Analysis is directly on the item (new format from API)
+            analysis = {
+                stockSymbol: item.symbol,
+                analysis: item.analysis
+            };
+        } else if (managerAnalyses[item.name]) {
+            // Analysis is in managerAnalyses (extracted format)
+            analysis = managerAnalyses[item.name];
+        }
+        
         const hasAnalysis = analysis && analysis.analysis && analysis.analysis.trim() !== '' && 
                            analysis.analysis !== 'Your analysis here. Explain why you picked ' + item.symbol + ' and your investment thesis in a couple of sentences.';
         
-        // Debug logging
-        if (item.name === 'Daniel') {
-            console.log('Daniel analysis check:', {
-                analysis: analysis,
-                hasAnalysis: hasAnalysis,
-                analysisText: analysis ? analysis.analysis : 'no analysis object',
-                managerAnalysesKeys: Object.keys(managerAnalyses)
-            });
-        }
         
         const itemId = `leaderboard-item-${index}`;
         const analysisId = `analysis-${index}`;
@@ -653,6 +667,19 @@ window.toggleAnalysis = function(analysisId) {
         console.error('Error toggling analysis:', error);
     }
 }
+
+// Use event delegation for clickable leaderboard items
+document.addEventListener('click', function(event) {
+    const leaderboardItem = event.target.closest('.leaderboard-item.clickable');
+    if (leaderboardItem) {
+        const analysisId = leaderboardItem.getAttribute('data-analysis-id');
+        if (analysisId) {
+            event.preventDefault();
+            event.stopPropagation();
+            window.toggleAnalysis(analysisId);
+        }
+    }
+});
 
 
 function getChangeSign(value) {

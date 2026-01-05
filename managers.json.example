@@ -1,15 +1,21 @@
 [
   {
     "name": "Manager Name 1",
-    "stockSymbol": "AAPL"
+    "stockSymbol": "AAPL",
+    "analysis": "iPhone success"
+
   },
   {
     "name": "Manager Name 2",
-    "stockSymbol": "TSLA"
+    "stockSymbol": "TSLA",
+    "analysis": "Robotaxis"
+
   },
   {
     "name": "Manager Name 3",
-    "stockSymbol": "MSFT"
+    "stockSymbol": "MSFT",
+    "analysis": "OpenAI"
+
   }
 ]
 

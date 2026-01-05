@@ -621,7 +621,8 @@ function generateMockCurrentData() {
             changePercent: parseFloat(ytdPercent.toFixed(2)),
             change1d: parseFloat(change1d.toFixed(2)),
             change1m: change1m !== null ? parseFloat(change1m.toFixed(2)) : null,
-            change3m: change3m !== null ? parseFloat(change3m.toFixed(2)) : null
+            change3m: change3m !== null ? parseFloat(change3m.toFixed(2)) : null,
+            analysis: manager.analysis || null // Include analysis from managers.json
         };
     });
     
