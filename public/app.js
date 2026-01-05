@@ -2,6 +2,7 @@ const API_BASE = '/api';
 
 // DOM Elements
 const leaderboard = document.getElementById('leaderboard');
+const indexes = document.getElementById('indexes');
 let performanceChart = null;
 let managerAnalyses = {}; // Cache for manager analyses
 
@@ -1805,18 +1806,110 @@ setInterval(() => {
     if (isMarketOpen()) {
         // Market hours: refresh every 15 minutes
         loadLeaderboard();
+        loadIndexes();
         loadChart();
     }
 }, 900000); // 15 minutes (900,000 milliseconds)
+
+// Load Indexes
+async function loadIndexes() {
+    try {
+        const useMock = new URLSearchParams(window.location.search).get('mock') === 'true';
+        
+        // Generate mock index data for testing or fallback
+        const mockData = [
+            {
+                symbol: 'SPY',
+                name: 'S&P 500',
+                currentPrice: 485.23,
+                changePercent: 12.45,
+                change1d: 0.23
+            },
+            {
+                symbol: 'QQQ',
+                name: 'Nasdaq 100',
+                currentPrice: 432.18,
+                changePercent: 15.67,
+                change1d: 0.45
+            },
+            {
+                symbol: 'DX-Y.NYB',
+                name: 'US Dollar',
+                currentPrice: 104.32,
+                changePercent: -2.15,
+                change1d: -0.12
+            }
+        ];
+        
+        if (useMock) {
+            renderIndexes(mockData);
+            return;
+        }
+        
+        const url = `${API_BASE}/indexes`;
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            console.warn('Index API failed, using mock data');
+            renderIndexes(mockData);
+            return;
+        }
+        
+        const data = await response.json();
+        
+        // Log the data we received for debugging
+        console.log('Index data received from API:', data);
+        
+        // If we got empty data or all null values, show error instead of mock data
+        if (!data || data.length === 0 || data.every(d => d.changePercent === null)) {
+            console.error('Index API returned no valid data');
+            indexes.innerHTML = `<div class="error-message">Failed to load index data. Please try again later.</div>`;
+            return;
+        }
+        
+        renderIndexes(data);
+    } catch (error) {
+        console.error('Error loading indexes:', error);
+        // Show error instead of mock data
+        indexes.innerHTML = `<div class="error-message">Failed to load index data: ${error.message}</div>`;
+    }
+}
+
+function renderIndexes(data) {
+    if (!data || data.length === 0) {
+        indexes.innerHTML = `
+            <div class="empty-state">
+                <p>No index data available.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    indexes.innerHTML = data.map((index) => {
+        const changePercentClass = index.changePercent !== null ? (index.changePercent >= 0 ? 'positive' : 'negative') : 'no-data';
+        const ytdValue = index.changePercent !== null 
+            ? getChangeSign(index.changePercent) + formatPercent(index.changePercent) + '%' 
+            : '-';
+        
+        return `
+            <div class="index-item">
+                <span class="index-symbol">${escapeHtml(index.symbol)}</span>
+                <span class="index-ytd ${changePercentClass}">${ytdValue}</span>
+            </div>
+        `;
+    }).join('');
+}
 
 // Initial load
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         loadLeaderboard();
+        loadIndexes();
         setTimeout(loadChart, 100);
     });
 } else {
     loadLeaderboard();
+    loadIndexes();
     setTimeout(loadChart, 100);
 }
 

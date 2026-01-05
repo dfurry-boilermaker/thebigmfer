@@ -8,6 +8,9 @@
     },
     "api/analyses.js": {
       "maxDuration": 10
+    },
+    "api/indexes.js": {
+      "maxDuration": 30
     }
   }
 }
