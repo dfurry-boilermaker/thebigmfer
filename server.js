@@ -538,12 +538,13 @@ app.get('/api/analyses', (req, res) => {
     }
 });
 
-// Get benchmarks (SPY, QQQ, DX-Y.NYB)
+// Get benchmarks (SPY, QQQ, DIA, DX-Y.NYB)
 app.get('/api/indexes', async (req, res) => {
     try {
         const indexes = [
             { symbol: 'SPY', name: 'S&P 500' },
             { symbol: 'QQQ', name: 'Nasdaq 100' },
+            { symbol: 'DIA', name: 'Dow Jones' },
             { symbol: 'DX-Y.NYB', name: 'US Dollar' }
         ];
         

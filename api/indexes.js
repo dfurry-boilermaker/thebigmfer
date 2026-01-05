@@ -20,6 +20,7 @@ module.exports = async (req, res) => {
         const indexes = [
             { symbol: 'SPY', name: 'S&P 500' },
             { symbol: 'QQQ', name: 'Nasdaq 100' },
+            { symbol: 'DIA', name: 'Dow Jones' },
             { symbol: 'DX-Y.NYB', name: 'US Dollar' }
         ];
         

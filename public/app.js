@@ -1833,6 +1833,13 @@ async function loadIndexes() {
                 change1d: 0.45
             },
             {
+                symbol: 'DIA',
+                name: 'Dow Jones',
+                currentPrice: 385.42,
+                changePercent: 10.23,
+                change1d: 0.18
+            },
+            {
                 symbol: 'DX-Y.NYB',
                 name: 'US Dollar',
                 currentPrice: 104.32,
