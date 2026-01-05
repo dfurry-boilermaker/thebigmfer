@@ -227,6 +227,12 @@ button:disabled {
     color: #1a1a1a;
 }
 
+.index-ytd-wrapper {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+}
+
 .index-ytd {
     font-size: 0.9375rem;
     font-weight: 600;
@@ -242,6 +248,14 @@ button:disabled {
 
 .index-ytd.no-data {
     color: #8a8a8a;
+}
+
+.index-ytd-label {
+    font-size: 0.6875rem;
+    font-weight: 400;
+    color: #8a8a8a;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 @media (max-width: 768px) {
@@ -270,6 +284,10 @@ button:disabled {
     .index-ytd {
         font-size: 0.875rem;
     }
+    
+    .index-ytd-label {
+        font-size: 0.625rem;
+    }
 }
 
 @media (max-width: 480px) {
@@ -297,6 +315,10 @@ button:disabled {
     
     .index-ytd {
         font-size: 0.8125rem;
+    }
+    
+    .index-ytd-label {
+        font-size: 0.5625rem;
     }
 }
 

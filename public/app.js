@@ -1894,7 +1894,10 @@ function renderIndexes(data) {
         return `
             <div class="index-item">
                 <span class="index-symbol">${escapeHtml(index.symbol)}</span>
-                <span class="index-ytd ${changePercentClass}">${ytdValue}</span>
+                <span class="index-ytd-wrapper">
+                    <span class="index-ytd ${changePercentClass}">${ytdValue}</span>
+                    <span class="index-ytd-label">YTD</span>
+                </span>
             </div>
         `;
     }).join('');
