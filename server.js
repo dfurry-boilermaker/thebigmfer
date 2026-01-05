@@ -538,7 +538,7 @@ app.get('/api/analyses', (req, res) => {
     }
 });
 
-// Get market indexes (SPY, QQQ, DX-Y.NYB)
+// Get benchmarks (SPY, QQQ, DX-Y.NYB)
 app.get('/api/indexes', async (req, res) => {
     try {
         const indexes = [
