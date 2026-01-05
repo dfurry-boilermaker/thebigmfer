@@ -41,7 +41,6 @@ module.exports = async (req, res) => {
         if (useCache) {
             const cachedData = await getCachedStockData(CACHE_KEYS.MONTHLY);
             if (cachedData) {
-                console.log('Using cached monthly data from KV');
                 return res.status(200).json(cachedData);
             }
         }
@@ -101,8 +100,6 @@ module.exports = async (req, res) => {
                         // Sort intraday data by date
                         intradayData.sort((a, b) => a.date.getTime() - b.date.getTime());
                         
-                        console.log(`Fetched ${intradayData.length} hourly data points for ${symbol}`);
-                        
                         intradayData.forEach(entry => {
                             const entryDate = entry.date;
                             const entryTimestamp = entryDate.getTime();
@@ -149,13 +146,9 @@ module.exports = async (req, res) => {
                             data.push(item.value);
                             timestamps.push(item.timestamp);
                         });
-                        
-                        console.log(`Added ${data.length} hourly points for ${symbol}`);
-                    } else {
-                        console.log(`No hourly data available for ${symbol}`);
                     }
                 } catch (intradayError) {
-                    console.log(`Hourly data not available for ${symbol}:`, intradayError.message);
+                    // Hourly data not available, will use daily data
                 }
                 
                 return {
@@ -188,7 +181,6 @@ module.exports = async (req, res) => {
         // After market hours: 24 hours (86400 seconds)
         const ttlSeconds = isMarketOpen() ? 900 : 86400;
         await setCachedStockData(CACHE_KEYS.MONTHLY, responseData, ttlSeconds);
-        console.log(`Caching monthly data with TTL: ${ttlSeconds} seconds`);
         
         res.status(200).json(responseData);
     } catch (error) {
@@ -197,7 +189,6 @@ module.exports = async (req, res) => {
         // If we have cached data, return it even on error
         const cachedData = await getCachedStockData(CACHE_KEYS.MONTHLY);
         if (cachedData) {
-            console.log('Error occurred, returning cached monthly data');
             return res.status(200).json(cachedData);
         }
         

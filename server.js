@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const YahooFinance = require('yahoo-finance2').default;
 const yahooFinance = new YahooFinance();
-const { generateMockCurrentData } = require('./api/utils');
+const { generateMockCurrentData, getYTDDividends } = require('./api/utils');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -79,7 +79,7 @@ async function getIntradayData(symbol, startDate, endDate, interval = '1h') {
         }
         return null;
     } catch (error) {
-        console.log(`Intraday data not available for ${symbol}, will use daily data:`, error.message);
+        // Intraday data not available, fallback to daily
         return null;
     }
 }
@@ -165,7 +165,6 @@ app.get('/api/stocks/current', async (req, res) => {
             const result = await yahooFinance.quote(symbols);
             quotes = Array.isArray(result) ? result : [result];
         } catch (error) {
-            console.log('Batch quote failed, fetching individually:', error.message);
             // Fallback: fetch individually
             try {
                 quotes = await Promise.all(
@@ -174,14 +173,12 @@ app.get('/api/stocks/current', async (req, res) => {
                             const result = await yahooFinance.quote(symbol);
                             return Array.isArray(result) ? result[0] : result;
                         } catch (err) {
-                            console.error(`Failed to fetch quote for ${symbol}:`, err.message);
                             return null;
                         }
                     })
                 );
                 quotes = quotes.filter(q => q !== null);
             } catch (fallbackError) {
-                console.error('All quote fetches failed:', fallbackError);
                 quotes = [];
             }
         }
@@ -226,31 +223,8 @@ app.get('/api/stocks/current', async (req, res) => {
                 ? ((currentPrice - baselinePrice) / baselinePrice) * 100 
                 : 0;
             
-            // Get YTD dividends (as percentage) - simplified for local dev
-            let ytdDividendYield = 0;
-            try {
-                const quoteSummary = await yahooFinance.quoteSummary(symbol, {
-                    modules: ['summaryDetail', 'calendarEvents']
-                });
-                if (quoteSummary && quoteSummary.summaryDetail) {
-                    const annualDividendRate = quoteSummary.summaryDetail.dividendRate || 
-                                             quoteSummary.summaryDetail.trailingAnnualDividendRate || 0;
-                    if (annualDividendRate > 0) {
-                        const today = new Date();
-                        const yearStart = new Date(2026, 0, 1);
-                        const daysSinceStart = Math.floor((today - yearStart) / (1000 * 60 * 60 * 24));
-                        const estimatedDividendFrequency = 4; // Quarterly
-                        const dividendPerPeriod = annualDividendRate / estimatedDividendFrequency;
-                        let dividendsPaid = 0;
-                        if (daysSinceStart >= 90) dividendsPaid += dividendPerPeriod;
-                        if (daysSinceStart >= 181) dividendsPaid += dividendPerPeriod;
-                        if (daysSinceStart >= 273) dividendsPaid += dividendPerPeriod;
-                        ytdDividendYield = baselinePrice > 0 ? (dividendsPaid / baselinePrice) * 100 : 0;
-                    }
-                }
-            } catch (error) {
-                // Silently fail for dividends in local dev
-            }
+            // Get YTD dividends (as percentage) - use shared utility function
+            const ytdDividendYield = await getYTDDividends(symbol, baselinePrice);
             
             // Calculate total return (price change + dividends)
             const ytdChange = ytdPriceChange + ytdDividendYield;
@@ -265,27 +239,9 @@ app.get('/api/stocks/current', async (req, res) => {
             }
             
             // Calculate 1m and 3m changes (only if enough time has passed in 2026)
-            const today = new Date();
-            const yearStart = new Date(2026, 0, 1);
-            const daysSinceStart = Math.floor((today - yearStart) / (1000 * 60 * 60 * 24));
-            
-            let change1m = null;
-            let change3m = null;
-            
-            if (daysSinceStart >= 30) {
-                // Get price from 30 days ago
-                const oneMonthAgo = new Date(today);
-                oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
-                // For now, set to null if not enough data
-                // You could fetch historical data here if needed
-            }
-            
-            if (daysSinceStart >= 90) {
-                // Get price from 90 days ago
-                const threeMonthsAgo = new Date(today);
-                threeMonthsAgo.setDate(threeMonthsAgo.getDate() - 90);
-                // For now, set to null if not enough data
-            }
+            // Note: Historical data fetching for 1m/3m is not implemented yet
+            const change1m = null;
+            const change3m = null;
             
             return {
                 name: manager.name,
@@ -319,6 +275,7 @@ app.get('/api/stocks/monthly', async (req, res) => {
         const useMock = req.query.mock === 'true';
         
         if (useMock) {
+            const { generateMockChartData } = require('./api/utils');
             const mockData = generateMockChartData();
             return res.json(mockData);
         }
@@ -443,7 +400,6 @@ app.get('/api/stocks/monthly', async (req, res) => {
                     
                     if (intradayData && intradayData.length > 0) {
                         intradayData.sort((a, b) => a.date.getTime() - b.date.getTime());
-                        console.log(`Fetched ${intradayData.length} hourly data points for ${symbol}`);
                         
                         const lastDailyTimestamp = timestamps.length > 0 ? timestamps[timestamps.length - 1] : 0;
                         let addedCount = 0;
@@ -466,14 +422,12 @@ app.get('/api/stocks/monthly', async (req, res) => {
                                     const openPercentChange = ((entry.open - baselinePrice) / baselinePrice) * 100;
                                     data.push(openPercentChange);
                                     timestamps.push(hourStartTimestamp);
-                                    addedCount++;
                                 }
                                 
                                 // Add close price at the end of the hour
                                 const closePercentChange = ((entry.close - baselinePrice) / baselinePrice) * 100;
                                 data.push(closePercentChange);
                                 timestamps.push(entryTimestamp);
-                                addedCount++;
                             }
                         });
                         
@@ -496,7 +450,6 @@ app.get('/api/stocks/monthly', async (req, res) => {
                             data.push(item.value);
                             timestamps.push(item.timestamp);
                         });
-                        console.log(`Added ${addedCount} hourly points for ${symbol}`);
                     } else {
                         // Fallback to daily data for last 7 days
                         const recentDailyData = historical.filter(entry => {
@@ -515,7 +468,7 @@ app.get('/api/stocks/monthly', async (req, res) => {
                         });
                     }
                 } catch (intradayError) {
-                    console.log(`Hourly data not available for ${symbol}, using daily data:`, intradayError.message);
+                    // Hourly data not available, use daily data
                     const recentDailyData = historical.filter(entry => {
                         const entryDate = new Date(entry.date);
                         return entryDate >= sevenDaysAgo;

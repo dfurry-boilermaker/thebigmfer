@@ -39,7 +39,6 @@ module.exports = async (req, res) => {
     if (useCache) {
         const cachedData = await getCachedStockData(CACHE_KEYS.CURRENT);
         if (cachedData) {
-            console.log('Using cached data from KV');
             return res.status(200).json(cachedData);
         }
     }
@@ -65,10 +64,8 @@ module.exports = async (req, res) => {
         if (isRateLimited) {
             const cachedData = await getCachedStockData(CACHE_KEYS.CURRENT);
             if (cachedData) {
-                console.log('Rate limited detected, using cached data');
                 return res.status(200).json(cachedData);
             } else {
-                console.log('Rate limited and no cache available, returning empty data');
                 // Return empty data structure so frontend doesn't break
                 const managers = loadManagersFromConfig();
                 return res.status(200).json(managers.map(m => ({
@@ -93,13 +90,11 @@ module.exports = async (req, res) => {
         } catch (error) {
             // Check if it's a rate limit error
             if (error.message && error.message.includes('Too Many Requests')) {
-                console.log('Rate limited, using cached data if available');
                 const cachedData = await getCachedStockData(CACHE_KEYS.CURRENT);
                 if (cachedData) {
                     return res.status(200).json(cachedData);
                 }
             }
-            console.log('Batch quote failed, fetching individually:', error.message);
             // Fallback: fetch individually
             try {
                 quotes = await Promise.all(
@@ -110,10 +105,8 @@ module.exports = async (req, res) => {
                         } catch (err) {
                             // Check for rate limit
                             if (err.message && err.message.includes('Too Many Requests')) {
-                                console.log(`Rate limited for ${symbol}`);
                                 return null;
                             }
-                            console.error(`Failed to fetch quote for ${symbol}:`, err.message);
                             return null;
                         }
                     })
@@ -124,7 +117,6 @@ module.exports = async (req, res) => {
                 if (quotes.length === 0) {
                     const cachedData = await getCachedStockData(CACHE_KEYS.CURRENT);
                     if (cachedData) {
-                        console.log('No quotes received (rate limited), using cached data');
                         return res.status(200).json(cachedData);
                     }
                 }
@@ -186,27 +178,9 @@ module.exports = async (req, res) => {
             }
             
             // Calculate 1m and 3m changes (only if enough time has passed in 2026)
-            const today = new Date();
-            const yearStart = new Date(2026, 0, 1);
-            const daysSinceStart = Math.floor((today - yearStart) / (1000 * 60 * 60 * 24));
-            
-            let change1m = null;
-            let change3m = null;
-            
-            if (daysSinceStart >= 30) {
-                // Get price from 30 days ago
-                const oneMonthAgo = new Date(today);
-                oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
-                // For now, set to null if not enough data
-                // You could fetch historical data here if needed
-            }
-            
-            if (daysSinceStart >= 90) {
-                // Get price from 90 days ago
-                const threeMonthsAgo = new Date(today);
-                threeMonthsAgo.setDate(threeMonthsAgo.getDate() - 90);
-                // For now, set to null if not enough data
-            }
+            // Note: Historical data fetching for 1m/3m is not implemented yet
+            const change1m = null;
+            const change3m = null;
             
             return {
                 name: manager.name,
@@ -233,9 +207,7 @@ module.exports = async (req, res) => {
             // During market hours: 15 minutes (900 seconds)
             // After market hours: 24 hours (86400 seconds)
             const ttlSeconds = isMarketOpen() ? 900 : 86400;
-            
             await setCachedStockData(CACHE_KEYS.CURRENT, results, ttlSeconds);
-            console.log(`Caching valid data with TTL: ${ttlSeconds} seconds`);
         }
         
         res.status(200).json(results);
@@ -245,7 +217,6 @@ module.exports = async (req, res) => {
         // If we have cached data, return it even on error
         const cachedData = await getCachedStockData(CACHE_KEYS.CURRENT);
         if (cachedData) {
-            console.log('Error occurred, returning cached data');
             return res.status(200).json(cachedData);
         }
         

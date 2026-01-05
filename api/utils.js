@@ -21,9 +21,8 @@ try {
     }
     
     edgeConfig = require('@vercel/edge-config').createClient(connectionString);
-    console.log('Vercel Edge Config initialized successfully (read-only)');
 } catch (error) {
-    console.log('Vercel Edge Config initialization failed, using in-memory cache only:', error.message);
+    // Edge Config initialization failed, fallback to in-memory cache only
     edgeConfig = null;
 }
 
@@ -86,7 +85,7 @@ async function getCachedStockData(key) {
                 return parsed;
             }
         } catch (error) {
-            console.error(`Error getting cache from Edge Config for ${key}:`, error.message);
+            // Edge Config read failed, continue to fallback
         }
     }
     
@@ -133,14 +132,13 @@ async function getLastUpdate() {
                 return parsed;
             }
         } catch (error) {
-            console.error('Error getting last update from Edge Config:', error.message);
+            // Edge Config read failed, continue to fallback
         }
     }
     
     return null;
 }
 
-// Check if a specific date/time is during market hours (9:30 AM - 4:00 PM ET, weekdays only)
 // Check if a date is a trading day (weekday and not a holiday)
 function isTradingDay(date) {
     // Convert date to Eastern Time
@@ -302,13 +300,11 @@ async function getBaselinePrices(symbols) {
         // Verify all symbols are present
         const allPresent = symbols.every(symbol => cachedBaselines.hasOwnProperty(symbol));
         if (allPresent) {
-            console.log('Using cached baseline prices');
             return symbols.map(symbol => cachedBaselines[symbol]);
         }
     }
     
     // Fetch baseline prices if not cached
-    console.log('Fetching baseline prices (will cache permanently)');
     const baselineDate = '2025-12-31';
     const baselinePromises = symbols.map(symbol => 
         getHistoricalPrice(symbol, baselineDate)
@@ -353,45 +349,29 @@ async function getYTDDividends(symbol, baselinePrice) {
             return 0; // No dividends
         }
         
-        // Calculate YTD dividends based on:
-        // 1. Dividends already paid (if ex-dividend date has passed)
-        // 2. Pro-rated annual dividend for the portion of the year that has passed
-        
+        // Calculate YTD dividends based on quarterly payments
         const today = new Date();
-        const yearStart = new Date(2026, 0, 1); // Jan 1, 2026
+        const yearStart = new Date(2026, 0, 1);
         const daysSinceStart = Math.floor((today - yearStart) / (1000 * 60 * 60 * 24));
-        const daysInYear = 365;
         
-        // Get dividend frequency (quarterly is most common, but we'll estimate)
         // Most stocks pay quarterly (4 times per year)
         const estimatedDividendFrequency = 4;
         const dividendPerPeriod = annualDividendRate / estimatedDividendFrequency;
         
         // Calculate how many dividend periods have passed
-        // Assuming quarterly payments: Q1 (end of March), Q2 (end of June), Q3 (end of Sept), Q4 (end of Dec)
+        // Quarterly payments: Q1 (end of March), Q2 (end of June), Q3 (end of Sept), Q4 (end of Dec)
         let dividendsPaid = 0;
+        if (daysSinceStart >= 90) dividendsPaid += dividendPerPeriod;  // After Q1
+        if (daysSinceStart >= 181) dividendsPaid += dividendPerPeriod; // After Q2
+        if (daysSinceStart >= 273) dividendsPaid += dividendPerPeriod; // After Q3
         
-        if (daysSinceStart >= 90) { // After Q1 (end of March)
-            dividendsPaid += dividendPerPeriod;
-        }
-        if (daysSinceStart >= 181) { // After Q2 (end of June)
-            dividendsPaid += dividendPerPeriod;
-        }
-        if (daysSinceStart >= 273) { // After Q3 (end of September)
-            dividendsPaid += dividendPerPeriod;
-        }
-        
-        // Check if there's an upcoming ex-dividend date that has already passed
-        if (calendarEvents && calendarEvents.exDividendDate) {
+        // Check if there's an ex-dividend date that has already passed
+        if (calendarEvents?.exDividendDate) {
             const exDividendDate = new Date(calendarEvents.exDividendDate);
-            if (exDividendDate >= yearStart && exDividendDate <= today) {
-                // This dividend should be included if it's been paid
-                // We'll add it if it's past the payment date
-                if (calendarEvents.dividendDate) {
-                    const dividendPaymentDate = new Date(calendarEvents.dividendDate);
-                    if (dividendPaymentDate <= today) {
-                        dividendsPaid += dividendPerPeriod;
-                    }
+            if (exDividendDate >= yearStart && exDividendDate <= today && calendarEvents.dividendDate) {
+                const dividendPaymentDate = new Date(calendarEvents.dividendDate);
+                if (dividendPaymentDate <= today) {
+                    dividendsPaid += dividendPerPeriod;
                 }
             }
         }
@@ -401,8 +381,8 @@ async function getYTDDividends(symbol, baselinePrice) {
         
         return dividendYield;
     } catch (error) {
-        console.log(`Error fetching dividends for ${symbol}:`, error.message);
-        return 0; // Return 0 if we can't fetch dividends
+        // Return 0 if we can't fetch dividends (non-critical error)
+        return 0;
     }
 }
 
@@ -484,7 +464,6 @@ async function getIntradayData(symbol, startDate, endDate, interval = '1h') {
     } catch (error) {
         // Intraday data might not be available, fallback to daily
         // This is expected for some stocks or outside market hours
-        console.log(`Intraday data not available for ${symbol}, will use daily data:`, error.message);
         return null;
     }
 }
