@@ -136,7 +136,7 @@ module.exports = async (req, res) => {
         });
         
         // Calculate performance for each manager
-        const results = managers.map((manager, index) => {
+        const results = await Promise.all(managers.map(async (manager, index) => {
             const symbol = manager.stockSymbol;
             const quote = quoteMap[symbol];
             const baselinePrice = baselinePrices[index];
@@ -192,7 +192,7 @@ module.exports = async (req, res) => {
                 change3m: change3m,
                 analysis: manager.analysis || null // Include analysis from managers.json
             };
-        });
+        }));
         
         // Sort by YTD percentage (descending)
         results.sort((a, b) => {
