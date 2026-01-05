@@ -221,10 +221,39 @@ app.get('/api/stocks/current', async (req, res) => {
             const currentPrice = quote.regularMarketPrice || quote.price || quote.regularMarketPreviousClose || 0;
             const previousClose = quote.regularMarketPreviousClose || baselinePrice || currentPrice;
             
-            // Calculate YTD percentage change
-            const ytdChange = baselinePrice > 0 
+            // Calculate YTD percentage change (price appreciation)
+            const ytdPriceChange = baselinePrice > 0 
                 ? ((currentPrice - baselinePrice) / baselinePrice) * 100 
                 : 0;
+            
+            // Get YTD dividends (as percentage) - simplified for local dev
+            let ytdDividendYield = 0;
+            try {
+                const quoteSummary = await yahooFinance.quoteSummary(symbol, {
+                    modules: ['summaryDetail', 'calendarEvents']
+                });
+                if (quoteSummary && quoteSummary.summaryDetail) {
+                    const annualDividendRate = quoteSummary.summaryDetail.dividendRate || 
+                                             quoteSummary.summaryDetail.trailingAnnualDividendRate || 0;
+                    if (annualDividendRate > 0) {
+                        const today = new Date();
+                        const yearStart = new Date(2026, 0, 1);
+                        const daysSinceStart = Math.floor((today - yearStart) / (1000 * 60 * 60 * 24));
+                        const estimatedDividendFrequency = 4; // Quarterly
+                        const dividendPerPeriod = annualDividendRate / estimatedDividendFrequency;
+                        let dividendsPaid = 0;
+                        if (daysSinceStart >= 90) dividendsPaid += dividendPerPeriod;
+                        if (daysSinceStart >= 181) dividendsPaid += dividendPerPeriod;
+                        if (daysSinceStart >= 273) dividendsPaid += dividendPerPeriod;
+                        ytdDividendYield = baselinePrice > 0 ? (dividendsPaid / baselinePrice) * 100 : 0;
+                    }
+                }
+            } catch (error) {
+                // Silently fail for dividends in local dev
+            }
+            
+            // Calculate total return (price change + dividends)
+            const ytdChange = ytdPriceChange + ytdDividendYield;
             
             // Calculate 1d change
             let change1d = null;

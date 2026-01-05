@@ -331,6 +331,81 @@ async function getBaselinePrices(symbols) {
     return baselinePrices;
 }
 
+// Get YTD dividends for a symbol (dividends paid since Jan 1, 2026)
+async function getYTDDividends(symbol, baselinePrice) {
+    try {
+        // Fetch dividend information from quoteSummary
+        const quoteSummary = await yahooFinance.quoteSummary(symbol, {
+            modules: ['summaryDetail', 'calendarEvents']
+        });
+        
+        if (!quoteSummary || !quoteSummary.summaryDetail) {
+            return 0;
+        }
+        
+        const summaryDetail = quoteSummary.summaryDetail;
+        const calendarEvents = quoteSummary.calendarEvents;
+        
+        // Get annual dividend rate
+        const annualDividendRate = summaryDetail.dividendRate || summaryDetail.trailingAnnualDividendRate || 0;
+        
+        if (annualDividendRate === 0) {
+            return 0; // No dividends
+        }
+        
+        // Calculate YTD dividends based on:
+        // 1. Dividends already paid (if ex-dividend date has passed)
+        // 2. Pro-rated annual dividend for the portion of the year that has passed
+        
+        const today = new Date();
+        const yearStart = new Date(2026, 0, 1); // Jan 1, 2026
+        const daysSinceStart = Math.floor((today - yearStart) / (1000 * 60 * 60 * 24));
+        const daysInYear = 365;
+        
+        // Get dividend frequency (quarterly is most common, but we'll estimate)
+        // Most stocks pay quarterly (4 times per year)
+        const estimatedDividendFrequency = 4;
+        const dividendPerPeriod = annualDividendRate / estimatedDividendFrequency;
+        
+        // Calculate how many dividend periods have passed
+        // Assuming quarterly payments: Q1 (end of March), Q2 (end of June), Q3 (end of Sept), Q4 (end of Dec)
+        let dividendsPaid = 0;
+        
+        if (daysSinceStart >= 90) { // After Q1 (end of March)
+            dividendsPaid += dividendPerPeriod;
+        }
+        if (daysSinceStart >= 181) { // After Q2 (end of June)
+            dividendsPaid += dividendPerPeriod;
+        }
+        if (daysSinceStart >= 273) { // After Q3 (end of September)
+            dividendsPaid += dividendPerPeriod;
+        }
+        
+        // Check if there's an upcoming ex-dividend date that has already passed
+        if (calendarEvents && calendarEvents.exDividendDate) {
+            const exDividendDate = new Date(calendarEvents.exDividendDate);
+            if (exDividendDate >= yearStart && exDividendDate <= today) {
+                // This dividend should be included if it's been paid
+                // We'll add it if it's past the payment date
+                if (calendarEvents.dividendDate) {
+                    const dividendPaymentDate = new Date(calendarEvents.dividendDate);
+                    if (dividendPaymentDate <= today) {
+                        dividendsPaid += dividendPerPeriod;
+                    }
+                }
+            }
+        }
+        
+        // Convert dividend amount to percentage of baseline price
+        const dividendYield = baselinePrice > 0 ? (dividendsPaid / baselinePrice) * 100 : 0;
+        
+        return dividendYield;
+    } catch (error) {
+        console.log(`Error fetching dividends for ${symbol}:`, error.message);
+        return 0; // Return 0 if we can't fetch dividends
+    }
+}
+
 // Get intraday/hourly data for a symbol
 async function getIntradayData(symbol, startDate, endDate, interval = '1h') {
     try {
@@ -640,6 +715,7 @@ module.exports = {
     loadManagersFromConfig,
     getHistoricalPrice,
     getBaselinePrices,
+    getYTDDividends,
     getIntradayData,
     generateMockChartData,
     generateMockCurrentData,

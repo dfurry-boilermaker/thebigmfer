@@ -3,6 +3,7 @@ const yahooFinance = new YahooFinance();
 const { 
     loadManagersFromConfig, 
     getBaselinePrices, 
+    getYTDDividends,
     shouldUseCache, 
     getCachedStockData, 
     setCachedStockData, 
@@ -164,10 +165,16 @@ module.exports = async (req, res) => {
             const currentPrice = quote.regularMarketPrice || quote.price || quote.regularMarketPreviousClose || 0;
             const previousClose = quote.regularMarketPreviousClose || baselinePrice || currentPrice;
             
-            // Calculate YTD percentage change
-            const ytdChange = baselinePrice > 0 
+            // Calculate YTD percentage change (price appreciation)
+            const ytdPriceChange = baselinePrice > 0 
                 ? ((currentPrice - baselinePrice) / baselinePrice) * 100 
                 : 0;
+            
+            // Get YTD dividends (as percentage)
+            const ytdDividendYield = await getYTDDividends(symbol, baselinePrice);
+            
+            // Calculate total return (price change + dividends)
+            const ytdChange = ytdPriceChange + ytdDividendYield;
             
             // Calculate 1d change
             let change1d = null;
