@@ -674,6 +674,7 @@ app.get('/api/indexes', async (req, res) => {
         res.json([
             { symbol: 'SPY', name: 'S&P 500', currentPrice: null, changePercent: null, change1d: null },
             { symbol: 'QQQ', name: 'Nasdaq 100', currentPrice: null, changePercent: null, change1d: null },
+            { symbol: 'DIA', name: 'Dow Jones', currentPrice: null, changePercent: null, change1d: null },
             { symbol: 'DX-Y.NYB', name: 'US Dollar', currentPrice: null, changePercent: null, change1d: null }
         ]);
     }
