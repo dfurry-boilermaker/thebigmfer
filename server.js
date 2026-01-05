@@ -530,6 +530,30 @@ app.get('/api/stocks/monthly', async (req, res) => {
     }
 });
 
+// Manager analyses endpoint
+app.get('/api/analyses', (req, res) => {
+    try {
+        const managers = loadManagersFromConfig();
+        
+        // Convert managers array to analyses object format
+        const analyses = {};
+        managers.forEach(manager => {
+            if (manager.analysis) {
+                analyses[manager.name] = {
+                    stockSymbol: manager.stockSymbol,
+                    analysis: manager.analysis
+                };
+            }
+        });
+        
+        res.json({ analyses });
+    } catch (error) {
+        console.error('Error loading manager analyses:', error);
+        // Return empty object if file doesn't exist or can't be read
+        res.json({ analyses: {} });
+    }
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });

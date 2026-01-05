@@ -1,50 +1,62 @@
 [
   {
     "name": "Daniel",
-    "stockSymbol": "NBIS"
+    "stockSymbol": "NBIS",
+    "analysis": "AI inference will continue to accelerate in 2026."
   },
   {
     "name": "Sam",
-    "stockSymbol": "NVDA"
+    "stockSymbol": "NVDA",
+    "analysis": "Your analysis here. Explain why you picked NVDA and your investment thesis in a couple of sentences."
   },
   {
     "name": "Szklarek",
-    "stockSymbol": "WY"
+    "stockSymbol": "WY",
+    "analysis": "Your analysis here. Explain why you picked WY and your investment thesis in a couple of sentences."
   },
   {
     "name": "Cale",
-    "stockSymbol": "NVO"
+    "stockSymbol": "NVO",
+    "analysis": "Your analysis here. Explain why you picked NVO and your investment thesis in a couple of sentences."
   },
   {
     "name": "Charlie",
-    "stockSymbol": "TSLA"
+    "stockSymbol": "TSLA",
+    "analysis": "Your analysis here. Explain why you picked TSLA and your investment thesis in a couple of sentences."
   },
   {
     "name": "Kruse",
-    "stockSymbol": "AMTM"
+    "stockSymbol": "AMTM",
+    "analysis": "Your analysis here. Explain why you picked AMTM and your investment thesis in a couple of sentences."
   },
   {
     "name": "Kyle",
-    "stockSymbol": "PLTR"
+    "stockSymbol": "PLTR",
+    "analysis": "Your analysis here. Explain why you picked PLTR and your investment thesis in a couple of sentences."
   },
   {
     "name": "Adam",
-    "stockSymbol": "JPM"
+    "stockSymbol": "JPM",
+    "analysis": "Your analysis here. Explain why you picked JPM and your investment thesis in a couple of sentences."
   },
   {
     "name": "Carson",
-    "stockSymbol": "AMZN"
+    "stockSymbol": "AMZN",
+    "analysis": "Your analysis here. Explain why you picked AMZN and your investment thesis in a couple of sentences."
   },
   {
     "name": "Grant",
-    "stockSymbol": "WM"
+    "stockSymbol": "WM",
+    "analysis": "Your analysis here. Explain why you picked WM and your investment thesis in a couple of sentences."
   },
   {
     "name": "Nick",
-    "stockSymbol": "PM"
+    "stockSymbol": "PM",
+    "analysis": "Zyn"
   },
   {
     "name": "Pierino",
-    "stockSymbol": "CRCL"
+    "stockSymbol": "CRCL",
+    "analysis": "Crypto guy P"
   }
 ]

@@ -3,6 +3,7 @@ const API_BASE = '/api';
 // DOM Elements
 const leaderboard = document.getElementById('leaderboard');
 let performanceChart = null;
+let managerAnalyses = {}; // Cache for manager analyses
 
 // Mock data for testing (hardcoded managers list)
 const MOCK_MANAGERS = [
@@ -357,6 +358,9 @@ function setCachedData(key, timestampKey, data) {
 
 async function loadLeaderboard() {
     try {
+        // Always fetch analyses first (needed for rendering dropdowns)
+        await fetchManagerAnalyses();
+        
         const useMock = new URLSearchParams(window.location.search).get('mock') === 'true';
         
         // Skip cache for mock data
@@ -396,7 +400,30 @@ async function loadLeaderboard() {
 // Shared mock data cache to ensure chart and leaderboard use exact same data
 let sharedMockData = null;
 
+// Fetch manager analyses
+async function fetchManagerAnalyses() {
+    try {
+        const url = `${API_BASE}/analyses`;
+        console.log('Fetching manager analyses from:', url);
+        const response = await fetch(url);
+        if (response.ok) {
+            const data = await response.json();
+            managerAnalyses = data.analyses || {};
+            console.log('Manager analyses loaded:', Object.keys(managerAnalyses).length, 'analyses');
+            console.log('Analyses data:', managerAnalyses);
+        } else {
+            console.error('Failed to fetch analyses, status:', response.status);
+        }
+    } catch (error) {
+        console.error('Failed to load manager analyses:', error.message);
+        managerAnalyses = {};
+    }
+}
+
 async function fetchLeaderboardData() {
+    // Fetch analyses first (needed for rendering)
+    await fetchManagerAnalyses();
+    
     // Use mock data if ?mock=true is in URL
     const useMock = new URLSearchParams(window.location.search).get('mock') === 'true';
     
@@ -424,6 +451,7 @@ async function fetchLeaderboardData() {
     
     const data = await response.json();
     console.log('Leaderboard data received:', data.length, 'items');
+    console.log('Manager analyses available:', Object.keys(managerAnalyses).length, 'analyses');
     
     // Cache the data
     setCachedData(CACHE_KEYS.leaderboard, CACHE_KEYS.leaderboardTimestamp, data);
@@ -474,8 +502,26 @@ function renderLeaderboard(data) {
         const change3mClass = item.change3m !== null ? (item.change3m >= 0 ? 'positive' : 'negative') : '';
         const changeYTDClass = item.changePercent !== null ? (item.changePercent >= 0 ? 'positive' : 'negative') : '';
 
+        // Get analysis for this manager
+        const analysis = managerAnalyses[item.name];
+        const hasAnalysis = analysis && analysis.analysis && analysis.analysis.trim() !== '' && 
+                           analysis.analysis !== 'Your analysis here. Explain why you picked ' + item.symbol + ' and your investment thesis in a couple of sentences.';
+        
+        // Debug logging
+        if (item.name === 'Daniel') {
+            console.log('Daniel analysis check:', {
+                analysis: analysis,
+                hasAnalysis: hasAnalysis,
+                analysisText: analysis ? analysis.analysis : 'no analysis object',
+                managerAnalysesKeys: Object.keys(managerAnalyses)
+            });
+        }
+        
+        const itemId = `leaderboard-item-${index}`;
+        const analysisId = `analysis-${index}`;
+
         return `
-            <div class="leaderboard-item ${rankClass}">
+            <div class="leaderboard-item ${rankClass} ${hasAnalysis ? 'clickable' : ''}" ${hasAnalysis ? `onclick="toggleAnalysis('${analysisId}')"` : ''} id="${itemId}">
                 <div class="rank">${rank}</div>
                 <div class="manager-info">
                     <span class="manager-name">${escapeHtml(item.name)}</span>
@@ -520,10 +566,34 @@ function renderLeaderboard(data) {
                         </span>
                     </div>
                 </div>
+                ${hasAnalysis ? `
+                    <div class="analysis-content" id="${analysisId}">
+                        <div class="analysis-text">${escapeHtml(analysis.analysis)}</div>
+                    </div>
+                ` : ''}
             </div>
         `;
     }).join('');
 }
+
+// Toggle analysis dropdown (global for onclick handler)
+window.toggleAnalysis = function(analysisId) {
+    const analysisContent = document.getElementById(analysisId);
+    const leaderboardItem = analysisContent.closest('.leaderboard-item');
+    
+    if (analysisContent.classList.contains('expanded')) {
+        analysisContent.classList.remove('expanded');
+        if (leaderboardItem) {
+            leaderboardItem.setAttribute('aria-expanded', 'false');
+        }
+    } else {
+        analysisContent.classList.add('expanded');
+        if (leaderboardItem) {
+            leaderboardItem.setAttribute('aria-expanded', 'true');
+        }
+    }
+}
+
 
 function getChangeSign(value) {
     return value >= 0 ? '+' : '';
