@@ -5,6 +5,9 @@
     },
     "api/stocks/monthly.js": {
       "maxDuration": 30
+    },
+    "api/analyses.js": {
+      "maxDuration": 10
     }
   }
 }

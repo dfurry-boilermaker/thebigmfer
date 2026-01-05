@@ -141,6 +141,48 @@ async function getLastUpdate() {
 }
 
 // Check if a specific date/time is during market hours (9:30 AM - 4:00 PM ET, weekdays only)
+// Check if a date is a trading day (weekday and not a holiday)
+function isTradingDay(date) {
+    // Convert date to Eastern Time
+    const etString = date.toLocaleString('en-US', { timeZone: 'America/New_York' });
+    const et = new Date(etString);
+    
+    const day = et.getDay(); // 0 = Sunday, 6 = Saturday
+    
+    // Exclude weekends
+    if (day === 0 || day === 6) {
+        return false;
+    }
+    
+    // Check if it's a market holiday in 2026
+    const year = et.getFullYear();
+    const month = et.getMonth();
+    const dayOfMonth = et.getDate();
+    
+    // 2026 US Market Holidays (NYSE/NASDAQ)
+    const holidays2026 = [
+        { month: 0, day: 1 },   // New Year's Day (Jan 1)
+        { month: 0, day: 19 },  // Martin Luther King Jr. Day (Jan 19 - 3rd Monday)
+        { month: 1, day: 16 },  // Presidents' Day (Feb 16 - 3rd Monday)
+        { month: 3, day: 3 },   // Good Friday (Apr 3)
+        { month: 4, day: 25 },  // Memorial Day (May 25 - last Monday)
+        { month: 6, day: 3 },   // Independence Day (Jul 3 - observed, since Jul 4 is Saturday)
+        { month: 8, day: 7 },   // Labor Day (Sep 7 - 1st Monday)
+        { month: 10, day: 11 }, // Veterans Day (Nov 11)
+        { month: 10, day: 26 }, // Thanksgiving (Nov 26 - 4th Thursday)
+        { month: 11, day: 25 }  // Christmas (Dec 25)
+    ];
+    
+    // Check if date matches any holiday
+    for (const holiday of holidays2026) {
+        if (holiday.month === month && holiday.day === dayOfMonth) {
+            return false;
+        }
+    }
+    
+    return true;
+}
+
 function isDuringMarketHours(date) {
     // Convert date to Eastern Time
     const etString = date.toLocaleString('en-US', { timeZone: 'America/New_York' });
@@ -320,8 +362,8 @@ async function getIntradayData(symbol, startDate, endDate, interval = '1h') {
                 if (!quote.date || quote.close === null || quote.close === undefined) {
                     return false;
                 }
-                // Only include data during market hours (9:30 AM - 4:00 PM ET, weekdays)
-                return isDuringMarketHours(quote.date);
+                // Only include data during market hours (9:30 AM - 4:00 PM ET) and on trading days
+                return isDuringMarketHours(quote.date) && isTradingDay(quote.date);
             });
             
             // Expand hourly data to include both open and close prices for each hour
@@ -602,6 +644,7 @@ module.exports = {
     generateMockCurrentData,
     isMarketOpen,
     isDuringMarketHours,
+    isTradingDay,
     shouldUseCache,
     shouldUseCacheSync,
     getCachedStockData,

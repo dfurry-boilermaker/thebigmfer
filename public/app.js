@@ -147,50 +147,96 @@ function generateMockChartData(leaderboardDataForSync = null) {
     ];
     
     // Generate weekly data points (one per week, Friday close) from Jan 2, 2026 to mock end date
+    // Helper function to check if a date is a trading day (weekday and not a holiday)
+    const isTradingDay = (date) => {
+        const day = date.getDay(); // 0 = Sunday, 6 = Saturday
+        
+        // Exclude weekends
+        if (day === 0 || day === 6) {
+            return false;
+        }
+        
+        // Check if it's a market holiday in 2026
+        const month = date.getMonth();
+        const dayOfMonth = date.getDate();
+        
+        // 2026 US Market Holidays (NYSE/NASDAQ)
+        const holidays2026 = [
+            { month: 0, day: 1 },   // New Year's Day (Jan 1)
+            { month: 0, day: 19 },  // Martin Luther King Jr. Day (Jan 19 - 3rd Monday)
+            { month: 1, day: 16 },  // Presidents' Day (Feb 16 - 3rd Monday)
+            { month: 3, day: 3 },   // Good Friday (Apr 3)
+            { month: 4, day: 25 },  // Memorial Day (May 25 - last Monday)
+            { month: 6, day: 3 },   // Independence Day (Jul 3 - observed, since Jul 4 is Saturday)
+            { month: 8, day: 7 },   // Labor Day (Sep 7 - 1st Monday)
+            { month: 10, day: 11 }, // Veterans Day (Nov 11)
+            { month: 10, day: 26 }, // Thanksgiving (Nov 26 - 4th Thursday)
+            { month: 11, day: 25 }  // Christmas (Dec 25)
+        ];
+        
+        // Check if date matches any holiday
+        for (const holiday of holidays2026) {
+            if (holiday.month === month && holiday.day === dayOfMonth) {
+                return false;
+            }
+        }
+        
+        return true;
+    };
+    
     const generateWeeklyData = (pattern, startDate, endDate) => {
         const data = [];
         const timestamps = [];
         
-        // Find the first Friday (or start from Jan 2 if it's a Friday)
+        // Start from the first trading day
         let currentDate = new Date(startDate);
-        const dayOfWeek = currentDate.getDay();
-        // If not Friday, move to next Friday
-        if (dayOfWeek !== 5) {
-            const daysUntilFriday = (5 - dayOfWeek + 7) % 7;
-            currentDate.setDate(currentDate.getDate() + (daysUntilFriday === 0 ? 7 : daysUntilFriday));
+        
+        // Find the first trading day (skip weekends and holidays)
+        while (!isTradingDay(currentDate) && currentDate <= endDate) {
+            currentDate.setDate(currentDate.getDate() + 1);
         }
         
         let weekCount = 0;
         const marketCloseHour = 16;
+        let tradingDayCount = 0;
         
         while (currentDate <= endDate) {
-            // Calculate actual days since start (same as leaderboard calculation)
-            const daysSinceStart = Math.floor((currentDate - startDate) / (1000 * 60 * 60 * 24));
+            // Only add data for trading days
+            if (isTradingDay(currentDate)) {
+                // Calculate actual days since start (same as leaderboard calculation)
+                const daysSinceStart = Math.floor((currentDate - startDate) / (1000 * 60 * 60 * 24));
+                
+                // Scale to ensure best performer reaches 100%+ over full year (~252 trading days)
+                // pattern.trend is now a multiplier for annual return (1.10 = 110% annual)
+                // Use same calculation as leaderboard for consistency
+                const tradingDaysPerYear = 252;
+                const annualReturn = pattern.trend; // e.g., 1.10 = 110%
+                const dailyReturn = annualReturn / tradingDaysPerYear; // Convert to daily
+                const trendComponent = tradingDayCount * dailyReturn;
+                const momentumComponent = tradingDayCount * pattern.momentum / 100;
+                
+                // Generate weekly close price - use week count for pattern
+                const weekSeed = weekCount * 0.1;
+                const randomFactor = (Math.sin(weekSeed) + Math.cos(weekSeed * 1.3)) * 0.3;
+                let weeklyValue = (pattern.base + trendComponent + momentumComponent + randomFactor * pattern.volatility * 0.3) * 100;
+                weeklyValue = parseFloat(weeklyValue.toFixed(2));
+                
+                const weeklyTimestamp = new Date(currentDate);
+                weeklyTimestamp.setHours(marketCloseHour, 0, 0, 0);
+                
+                data.push(weeklyValue);
+                timestamps.push(weeklyTimestamp.getTime());
+                
+                tradingDayCount++;
+            }
             
-            // Scale to ensure best performer reaches 100%+ over full year (~252 trading days)
-            // pattern.trend is now a multiplier for annual return (1.10 = 110% annual)
-            // Use same calculation as leaderboard for consistency
-            const tradingDaysPerYear = 252;
-            const annualReturn = pattern.trend; // e.g., 1.10 = 110%
-            const dailyReturn = annualReturn / tradingDaysPerYear; // Convert to daily
-            const trendComponent = daysSinceStart * dailyReturn;
-            const momentumComponent = daysSinceStart * pattern.momentum / 100;
+            // Move to next day
+            currentDate.setDate(currentDate.getDate() + 1);
             
-            // Generate weekly close price - use week count for pattern
-            const weekSeed = weekCount * 0.1;
-            const randomFactor = (Math.sin(weekSeed) + Math.cos(weekSeed * 1.3)) * 0.3;
-            let weeklyValue = (pattern.base + trendComponent + momentumComponent + randomFactor * pattern.volatility * 0.3) * 100;
-            weeklyValue = parseFloat(weeklyValue.toFixed(2));
-            
-            const weeklyTimestamp = new Date(currentDate);
-            weeklyTimestamp.setHours(marketCloseHour, 0, 0, 0);
-            
-            data.push(weeklyValue);
-            timestamps.push(weeklyTimestamp.getTime());
-            
-            weekCount++;
-            // Move to next Friday
-            currentDate.setDate(currentDate.getDate() + 7);
+            // Increment week count every 7 days (for pattern generation)
+            if (currentDate.getDay() === 1) { // Monday
+                weekCount++;
+            }
         }
         
         return { data, timestamps };
@@ -369,6 +415,8 @@ async function loadLeaderboard() {
             const cachedData = getCachedData(CACHE_KEYS.leaderboard, CACHE_KEYS.leaderboardTimestamp);
             if (cachedData) {
                 console.log('Using cached leaderboard data');
+                // Ensure analyses are loaded before rendering (they're needed for hasAnalysis check)
+                await fetchManagerAnalyses();
                 renderLeaderboard(cachedData);
                 
                 // Fetch fresh data in background (don't wait for it)
@@ -412,10 +460,13 @@ async function fetchManagerAnalyses() {
             console.log('Manager analyses loaded:', Object.keys(managerAnalyses).length, 'analyses');
             console.log('Analyses data:', managerAnalyses);
         } else {
-            console.error('Failed to fetch analyses, status:', response.status);
+            console.error('Failed to fetch analyses, status:', response.status, response.statusText);
+            const errorText = await response.text().catch(() => '');
+            console.error('Error response:', errorText);
+            managerAnalyses = {};
         }
     } catch (error) {
-        console.error('Failed to load manager analyses:', error.message);
+        console.error('Failed to load manager analyses:', error.message, error);
         managerAnalyses = {};
     }
 }
@@ -578,19 +629,28 @@ function renderLeaderboard(data) {
 
 // Toggle analysis dropdown (global for onclick handler)
 window.toggleAnalysis = function(analysisId) {
-    const analysisContent = document.getElementById(analysisId);
-    const leaderboardItem = analysisContent.closest('.leaderboard-item');
-    
-    if (analysisContent.classList.contains('expanded')) {
-        analysisContent.classList.remove('expanded');
-        if (leaderboardItem) {
-            leaderboardItem.setAttribute('aria-expanded', 'false');
+    try {
+        const analysisContent = document.getElementById(analysisId);
+        if (!analysisContent) {
+            console.error('Analysis content not found:', analysisId);
+            return;
         }
-    } else {
-        analysisContent.classList.add('expanded');
-        if (leaderboardItem) {
-            leaderboardItem.setAttribute('aria-expanded', 'true');
+        
+        const leaderboardItem = analysisContent.closest('.leaderboard-item');
+        
+        if (analysisContent.classList.contains('expanded')) {
+            analysisContent.classList.remove('expanded');
+            if (leaderboardItem) {
+                leaderboardItem.setAttribute('aria-expanded', 'false');
+            }
+        } else {
+            analysisContent.classList.add('expanded');
+            if (leaderboardItem) {
+                leaderboardItem.setAttribute('aria-expanded', 'true');
+            }
         }
+    } catch (error) {
+        console.error('Error toggling analysis:', error);
     }
 }
 
@@ -774,6 +834,23 @@ function renderChart(chartData, currentData) {
         // Note: Data now starts from Jan 2, 2026 (no Dec 31 baseline in display)
         const dates = [];
         
+        // Helper function to check if a date is a trading day (reusable)
+        const isTradingDay = (date) => {
+            const day = date.getDay();
+            if (day === 0 || day === 6) return false; // Weekend
+            // Check 2026 holidays
+            const month = date.getMonth();
+            const dayOfMonth = date.getDate();
+            const holidays2026 = [
+                { month: 0, day: 1 }, { month: 0, day: 19 },
+                { month: 1, day: 16 }, { month: 3, day: 3 },
+                { month: 4, day: 25 }, { month: 6, day: 3 },
+                { month: 8, day: 7 }, { month: 10, day: 11 },
+                { month: 10, day: 26 }, { month: 11, day: 25 }
+            ];
+            return !holidays2026.some(h => h.month === month && h.day === dayOfMonth);
+        };
+        
         // Helper function to parse label (e.g., "Jan 2" or "Jan")
         const parseLabel = (label) => {
             const parts = label.trim().split(/\s+/);
@@ -797,11 +874,15 @@ function renderChart(chartData, currentData) {
             const datesNeeded = maxDataPoints - 1;
             
             if (labels.length >= datesNeeded) {
-                // We have enough labels, use them directly
+                // We have enough labels, use them directly (but filter out weekends/holidays)
                 for (let i = 0; i < datesNeeded; i++) {
                     const { monthIndex, day } = parseLabel(labels[i]);
                     if (monthIndex !== -1 && day !== null) {
-                        dates.push(new Date(currentYear, monthIndex, day));
+                        const date = new Date(currentYear, monthIndex, day);
+                        // Only add if it's a trading day
+                        if (isTradingDay(date)) {
+                            dates.push(date);
+                        }
                     }
                 }
             } else {
@@ -809,18 +890,24 @@ function renderChart(chartData, currentData) {
                 for (let i = 0; i < labels.length; i++) {
                     const { monthIndex, day } = parseLabel(labels[i]);
                     if (monthIndex !== -1 && day !== null) {
-                        dates.push(new Date(currentYear, monthIndex, day));
+                        const date = new Date(currentYear, monthIndex, day);
+                        // Only add if it's a trading day
+                        if (isTradingDay(date)) {
+                            dates.push(date);
+                        }
                     }
                 }
-                // Fill remaining dates sequentially from last label
+                // Fill remaining dates sequentially from last label, but only use trading days up to today
                 if (labels.length > 0) {
                     const lastLabel = parseLabel(labels[labels.length - 1]);
                     if (lastLabel.monthIndex !== -1 && lastLabel.day !== null) {
+                        const today = new Date();
+                        today.setHours(23, 59, 59, 999);
                         let currentDate = new Date(currentYear, lastLabel.monthIndex, lastLabel.day);
-                        while (dates.length < maxDataPoints) {
+                        while (dates.length < maxDataPoints && currentDate <= today) {
                             currentDate.setDate(currentDate.getDate() + 1);
-                            // Skip weekends
-                            if (currentDate.getDay() !== 0 && currentDate.getDay() !== 6) {
+                            // Only add trading days up to today
+                            if (isTradingDay(currentDate) && currentDate <= today) {
                                 dates.push(new Date(currentDate));
                             }
                         }
@@ -878,11 +965,17 @@ function renderChart(chartData, currentData) {
             }
         }
         
-        // Ensure we have dates for all data points
+        // Ensure we have dates for all data points (only trading days)
         while (dates.length < maxDataPoints) {
             const lastDate = new Date(dates[dates.length - 1]);
             lastDate.setDate(lastDate.getDate() + 1);
-            dates.push(lastDate);
+            // Only add if it's a trading day
+            while (!isTradingDay(lastDate) && dates.length < maxDataPoints) {
+                lastDate.setDate(lastDate.getDate() + 1);
+            }
+            if (dates.length < maxDataPoints) {
+                dates.push(new Date(lastDate));
+            }
         }
         
         // Trim to exact number of data points
@@ -901,19 +994,65 @@ function renderChart(chartData, currentData) {
             dates: dates.map(d => d.toISOString().split('T')[0])
         });
         
-        // Ensure we have exactly maxDataPoints dates
+        // Ensure we have exactly maxDataPoints dates (only trading days)
         if (dates.length !== maxDataPoints) {
             console.warn(`Date count mismatch: expected ${maxDataPoints}, got ${dates.length}`);
-            // Fill or trim to match
-            while (dates.length < maxDataPoints) {
+            // Fill or trim to match (only trading days)
+            while (dates.length < maxDataPoints && dates.length > 0) {
                 const lastDate = new Date(dates[dates.length - 1]);
                 lastDate.setDate(lastDate.getDate() + 1);
-                dates.push(lastDate);
+                // Only add if it's a trading day
+                while (!isTradingDay(lastDate) && dates.length < maxDataPoints) {
+                    lastDate.setDate(lastDate.getDate() + 1);
+                }
+                if (dates.length < maxDataPoints) {
+                    dates.push(new Date(lastDate));
+                }
             }
             if (dates.length > maxDataPoints) {
                 dates.length = maxDataPoints;
             }
         }
+        
+        // Create a mapping of timestamps to sequential trading day indices
+        // This will compress weekends so Friday flows directly into Monday
+        const today = new Date();
+        today.setHours(23, 59, 59, 999); // End of today
+        const todayTimestamp = today.getTime();
+        
+        const allUniqueTimestamps = [];
+        chartData.data.forEach(stock => {
+            const timestamps = stock.timestamps || [];
+            timestamps.forEach((ts, idx) => {
+                // Only include timestamps from Jan 2, 2026 up to today (no future dates)
+                if (ts && ts >= firstTradingDay.getTime() && ts <= todayTimestamp && !allUniqueTimestamps.includes(ts)) {
+                    allUniqueTimestamps.push(ts);
+                }
+            });
+        });
+        // Also add dates from the dates array if they're not already included (but only up to today)
+        dates.forEach(date => {
+            const ts = date.getTime();
+            if (ts >= firstTradingDay.getTime() && ts <= todayTimestamp && !allUniqueTimestamps.includes(ts)) {
+                allUniqueTimestamps.push(ts);
+            }
+        });
+        // Sort timestamps and create index mapping (only up to today)
+        allUniqueTimestamps.sort((a, b) => a - b);
+        // Filter out future timestamps before creating the mapping
+        const filteredTimestamps = allUniqueTimestamps.filter(ts => ts <= todayTimestamp);
+        const timestampToIndex = new Map();
+        filteredTimestamps.forEach((ts, idx) => {
+            timestampToIndex.set(ts, idx);
+        });
+        
+        // Create label mapping from trading day indices to dates (only up to today)
+        const indexToDateLabel = new Map();
+        filteredTimestamps.forEach((ts, idx) => {
+            const date = new Date(ts);
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            indexToDateLabel.set(idx, `${monthNames[date.getMonth()]} ${date.getDate()}`);
+        });
         
         const datasets = chartData.data.map((stock, index) => {
             const color = colors[index % colors.length];
@@ -936,9 +1075,40 @@ function renderChart(chartData, currentData) {
                     timestamp = date.getTime();
                 }
                 
-                // Skip data points before Jan 2, 2026
-                if (timestamp < firstTradingDayTimestamp) {
+                // Skip data points before Jan 2, 2026 or after today
+                if (timestamp < firstTradingDayTimestamp || timestamp > todayTimestamp) {
                     return null;
+                }
+                
+                // Map timestamp to sequential trading day index (compresses weekends)
+                // Only process timestamps up to today
+                if (timestamp > todayTimestamp) {
+                    return null;
+                }
+                
+                let tradingDayIndex = timestampToIndex.get(timestamp);
+                if (tradingDayIndex === undefined) {
+                    // If timestamp not in map, add it (but only if it's not in the future)
+                    if (timestamp <= todayTimestamp && !allUniqueTimestamps.includes(timestamp)) {
+                        allUniqueTimestamps.push(timestamp);
+                        allUniqueTimestamps.sort((a, b) => a - b);
+                        // Rebuild maps, filtering out future dates
+                        timestampToIndex.clear();
+                        indexToDateLabel.clear();
+                        allUniqueTimestamps.forEach((ts, i) => {
+                            // Only include timestamps up to today
+                            if (ts <= todayTimestamp) {
+                                timestampToIndex.set(ts, i);
+                                const date = new Date(ts);
+                                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                                indexToDateLabel.set(i, `${monthNames[date.getMonth()]} ${date.getDate()}`);
+                            }
+                        });
+                        tradingDayIndex = timestampToIndex.get(timestamp);
+                    }
+                    if (tradingDayIndex === undefined) {
+                        return null;
+                    }
                 }
                 
                 // For the last data point, always use current YTD from leaderboard to ensure accuracy
@@ -949,7 +1119,7 @@ function renderChart(chartData, currentData) {
                 }
                 
                 return {
-                    x: timestamp,
+                    x: tradingDayIndex,
                     y: yValue
                 };
             }).filter(point => point !== null); // Remove null entries
@@ -959,14 +1129,16 @@ function renderChart(chartData, currentData) {
             // Fewer data points = more responsive (higher tension)
             let adaptiveTension = 0.1; // Default - smoother
             if (timeData.length > 0) {
-                const timeSpan = timeData[timeData.length - 1].x - timeData[0].x;
-                const dataPointsPerDay = timeData.length / (timeSpan / (1000 * 60 * 60 * 24));
+                const indexSpan = timeData[timeData.length - 1].x - timeData[0].x;
+                // Since x is now trading day index, we can estimate data density
+                // Each index represents one trading day
+                const dataPointsPerTradingDay = timeData.length / Math.max(1, indexSpan);
                 
                 // Adjust tension based on data density (lower values = smoother)
-                if (dataPointsPerDay > 6) {
+                if (dataPointsPerTradingDay > 6) {
                     // High density (hourly data) - very smooth
                     adaptiveTension = 0.05;
-                } else if (dataPointsPerDay > 1) {
+                } else if (dataPointsPerTradingDay > 1) {
                     // Medium density (daily data) - smooth
                     adaptiveTension = 0.1;
                 } else {
@@ -992,30 +1164,27 @@ function renderChart(chartData, currentData) {
             };
         });
 
-        // Calculate min and max dates for the time scale
-        // Start from Jan 2, 2026 (first trading day)
-        let minDate = new Date(2026, 0, 2).getTime(); // Jan 2, 2026
-        let maxDate = new Date(2026, 11, 31).getTime();
+        // Calculate min and max trading day indices (for linear scale)
+        let minIndex = 0;
+        let maxIndex = 0;
         
         if (datasets.length > 0 && datasets[0].data.length > 0) {
-            // Find min/max from all datasets
-            const allTimestamps = [];
+            // Find min/max indices from all datasets
+            const allIndices = [];
             datasets.forEach(dataset => {
                 if (dataset.data && dataset.data.length > 0) {
                     dataset.data.forEach(point => {
-                        if (point.x) allTimestamps.push(point.x);
+                        if (point.x !== null && point.x !== undefined) {
+                            allIndices.push(point.x);
+                        }
                     });
                 }
             });
             
-            if (allTimestamps.length > 0) {
-                minDate = Math.min(...allTimestamps);
-                maxDate = Math.max(...allTimestamps);
+            if (allIndices.length > 0) {
+                minIndex = Math.min(...allIndices);
+                maxIndex = Math.max(...allIndices);
             }
-        } else if (dates.length > 0) {
-            // Fallback to calculated dates
-            minDate = dates[0] ? dates[0].getTime() : new Date(2026, 0, 2).getTime(); // Jan 2, 2026
-            maxDate = dates[dates.length - 1] ? dates[dates.length - 1].getTime() : new Date(2026, 11, 31).getTime();
         }
         
         // Validate data before creating chart
@@ -1032,8 +1201,8 @@ function renderChart(chartData, currentData) {
         console.log('Creating chart with:', {
             datasetsCount: datasets.length,
             dataPointsPerDataset: datasets[0].data.length,
-            minDate: new Date(minDate).toISOString(),
-            maxDate: new Date(maxDate).toISOString()
+            minIndex: minIndex,
+            maxIndex: maxIndex
         });
 
         performanceChart = new Chart(ctx, {
@@ -1045,6 +1214,23 @@ function renderChart(chartData, currentData) {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
+                    title: {
+                        display: true,
+                        text: 'YTD Performance',
+                        position: 'top',
+                        align: 'center',
+                        fullSize: true,
+                        color: '#666666',
+                        font: {
+                            size: isMobile ? 10 : 12,
+                            weight: '500',
+                            family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", sans-serif'
+                        },
+                        padding: {
+                            top: 0,
+                            bottom: isMobile ? 8 : 12
+                        }
+                    },
                     legend: {
                         display: false
                     },
@@ -1084,16 +1270,9 @@ function renderChart(chartData, currentData) {
                         }
                     },
                     x: {
-                        type: 'time',
-                        time: {
-                            unit: 'day',
-                            displayFormats: {
-                                day: 'MMM d'
-                            },
-                            tooltipFormat: 'MMM d, yyyy'
-                        },
-                        min: minDate,
-                        max: maxDate,
+                        type: 'linear',
+                        min: minIndex - 0.5,
+                        max: maxIndex + 0.5,
                         position: 'bottom',
                         title: {
                             display: false
@@ -1104,15 +1283,9 @@ function renderChart(chartData, currentData) {
                             color: 'rgba(0, 0, 0, 0.05)',
                             drawOnChartArea: true
                         },
-                        adapters: {
-                            date: {
-                                locale: 'en-US'
-                            }
-                        },
                         ticks: {
                             display: true,
-                            source: 'auto',
-                            maxTicksLimit: isMobile ? 5 : 8,
+                            maxTicksLimit: isMobile ? 6 : 8, // Increased for mobile to ensure last date shows
                             autoSkip: true,
                             autoSkipPadding: 10,
                             color: '#666666',
@@ -1123,22 +1296,51 @@ function renderChart(chartData, currentData) {
                             maxRotation: isMobile ? 45 : 0,
                             minRotation: 0,
                             padding: isMobile ? 8 : 12,
-                            // Format dates as "MMM d"
+                            // Map trading day indices to date labels
                             callback: function(value, index, ticks) {
                                 if (value === null || value === undefined) {
                                     return '';
                                 }
-                                const date = new Date(value);
-                                if (isNaN(date.getTime())) {
-                                    return '';
+                                const tradingDayIndex = Math.round(value);
+                                let label = indexToDateLabel.get(tradingDayIndex);
+                                
+                                // On mobile, always show the last tick (current date) even if it's not in the normal tick sequence
+                                if (isMobile && index === ticks.length - 1) {
+                                    // Find the last available label (max index) to ensure current date is shown
+                                    let maxIdx = -1;
+                                    let lastLabel = '';
+                                    indexToDateLabel.forEach((lbl, idx) => {
+                                        if (idx > maxIdx) {
+                                            maxIdx = idx;
+                                            lastLabel = lbl;
+                                        }
+                                    });
+                                    // If the current tick is not the last date, return the last date instead
+                                    if (tradingDayIndex < maxIdx && lastLabel) {
+                                        return lastLabel;
+                                    }
                                 }
-                                // Skip Dec 31, 2025
-                                if (date.getFullYear() === 2025 && date.getMonth() === 11 && date.getDate() === 31) {
-                                    return '';
+                                
+                                return label || '';
+                            },
+                            // Force the last tick to always be at max index on mobile
+                            stepSize: isMobile ? undefined : undefined, // Let autoSkip handle it
+                            // Custom function to ensure last tick is included
+                            afterBuildTicks: function(scale) {
+                                if (isMobile && scale.ticks && scale.ticks.length > 0) {
+                                    // Get the max index
+                                    const maxIdx = Math.max(...Array.from(indexToDateLabel.keys()));
+                                    const lastTick = scale.ticks[scale.ticks.length - 1];
+                                    
+                                    // If the last tick is not at max index, replace it
+                                    if (lastTick && Math.round(lastTick.value) < maxIdx) {
+                                        const lastLabel = indexToDateLabel.get(maxIdx);
+                                        if (lastLabel) {
+                                            lastTick.value = maxIdx;
+                                            lastTick.label = lastLabel;
+                                        }
+                                    }
                                 }
-                                // Format other dates as "MMM d"
-                                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                                return `${monthNames[date.getMonth()]} ${date.getDate()}`;
                             }
                         }
                     }
@@ -1146,7 +1348,7 @@ function renderChart(chartData, currentData) {
                 layout: {
                     padding: {
                         right: isMobile ? 30 : 120,
-                        left: isMobile ? 5 : 20,
+                        left: isMobile ? 30 : 20,
                         top: isMobile ? 10 : 20,
                         bottom: isMobile ? 10 : 20
                     }

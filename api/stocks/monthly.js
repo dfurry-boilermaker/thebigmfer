@@ -10,7 +10,8 @@ const {
     setCachedStockData, 
     CACHE_KEYS,
     isMarketOpen, 
-    isDuringMarketHours 
+    isDuringMarketHours,
+    isTradingDay
 } = require('../utils');
 
 module.exports = async (req, res) => {
@@ -106,8 +107,8 @@ module.exports = async (req, res) => {
                             const entryDate = entry.date;
                             const entryTimestamp = entryDate.getTime();
                             
-                            // Only include data from Jan 2, 2026 onwards
-                            if (entryTimestamp >= firstTradingDay.getTime()) {
+                            // Only include data from Jan 2, 2026 onwards and on trading days
+                            if (entryTimestamp >= firstTradingDay.getTime() && isTradingDay(entryDate)) {
                                 // Calculate start of hour timestamp (for open price)
                                 const hourStart = new Date(entryDate);
                                 hourStart.setMinutes(0);
