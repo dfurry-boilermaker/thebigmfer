@@ -262,6 +262,53 @@ app.get('/api/stocks/current', async (req, res) => {
             return bPercent - aPercent;
         });
         
+        // Fetch SPY (S&P 500) as benchmark
+        try {
+            const { getYTDDividends } = require('./api/utils');
+            const spyQuote = await yahooFinance.quote('SPY');
+            const spyBaselineDate = '2025-12-31';
+            const spyBaseline = await getHistoricalPrice('SPY', spyBaselineDate);
+            
+            if (spyQuote && spyBaseline) {
+                const spyCurrentPrice = spyQuote.regularMarketPrice || spyQuote.price || spyQuote.regularMarketPreviousClose || 0;
+                const spyPreviousClose = spyQuote.regularMarketPreviousClose || spyBaseline || spyCurrentPrice;
+                
+                // Calculate YTD percentage change (price appreciation)
+                const spyYtdPriceChange = spyBaseline > 0 
+                    ? ((spyCurrentPrice - spyBaseline) / spyBaseline) * 100 
+                    : 0;
+                
+                // Get YTD dividends (as percentage)
+                const spyYtdDividendYield = await getYTDDividends('SPY', spyBaseline);
+                
+                // Calculate total return (price change + dividends)
+                const spyYtdChange = spyYtdPriceChange + spyYtdDividendYield;
+                
+                // Calculate 1d change
+                let spyChange1d = null;
+                if (spyPreviousClose && spyPreviousClose > 0) {
+                    spyChange1d = ((spyCurrentPrice - spyPreviousClose) / spyPreviousClose) * 100;
+                } else if (spyBaseline && spyBaseline > 0) {
+                    spyChange1d = ((spyCurrentPrice - spyBaseline) / spyBaseline) * 100;
+                }
+                
+                // Add SPY as benchmark (not ranked)
+                results.push({
+                    name: 'S&P 500',
+                    symbol: 'SPY',
+                    currentPrice: spyCurrentPrice,
+                    changePercent: spyYtdChange,
+                    change1d: spyChange1d,
+                    change1m: null,
+                    change3m: null,
+                    analysis: null,
+                    isBenchmark: true
+                });
+            }
+        } catch (spyError) {
+            // If SPY fetch fails, continue without it (non-critical)
+        }
+        
         res.json(results);
     } catch (error) {
         console.error('Error fetching current stocks:', error);

@@ -555,7 +555,12 @@ function renderLeaderboard(data) {
     console.log('Rendering leaderboard with', data.length, 'items');
     console.log('Manager analyses available:', Object.keys(managerAnalyses).length);
     
-    leaderboard.innerHTML = data.map((item, index) => {
+    // Separate competitors from benchmark
+    const competitors = data.filter(item => !item.isBenchmark);
+    const benchmark = data.find(item => item.isBenchmark);
+    
+    // Render competitors with rankings
+    let leaderboardHTML = competitors.map((item, index) => {
         const rank = index + 1;
         const rankClass = rank === 1 ? 'first' : rank === 2 ? 'second' : rank === 3 ? 'third' : '';
         
@@ -639,6 +644,65 @@ function renderLeaderboard(data) {
             </div>
         `;
     }).join('');
+    
+    // Add benchmark (SPY) at the end without a rank
+    if (benchmark) {
+        const change1dClass = benchmark.change1d !== null ? (benchmark.change1d >= 0 ? 'positive' : 'negative') : '';
+        const change1mClass = benchmark.change1m !== null ? (benchmark.change1m >= 0 ? 'positive' : 'negative') : '';
+        const change3mClass = benchmark.change3m !== null ? (benchmark.change3m >= 0 ? 'positive' : 'negative') : '';
+        const changeYTDClass = benchmark.changePercent !== null ? (benchmark.changePercent >= 0 ? 'positive' : 'negative') : '';
+        
+        leaderboardHTML += `
+            <div class="leaderboard-item benchmark">
+                <div class="rank">—</div>
+                <div class="manager-info">
+                    <span class="manager-name">${escapeHtml(benchmark.name)}</span>
+                    <span class="stock-symbol">${escapeHtml(benchmark.symbol)}</span>
+                    <span class="current-price">$${formatPrice(benchmark.currentPrice)}</span>
+                    <div class="time-periods mobile-only">
+                        <span class="time-period">
+                            <span class="period-label">1d</span>
+                            <span class="period-value ${benchmark.change1d === null ? 'no-data' : change1dClass}">${benchmark.change1d !== null ? getChangeSign(benchmark.change1d) + formatPercent(benchmark.change1d) + '%' : '-'}</span>
+                        </span>
+                        <span class="time-period">
+                            <span class="period-label">1m</span>
+                            <span class="period-value ${benchmark.change1m === null ? 'no-data' : change1mClass}">${benchmark.change1m !== null ? getChangeSign(benchmark.change1m) + formatPercent(benchmark.change1m) + '%' : '-'}</span>
+                        </span>
+                        <span class="time-period">
+                            <span class="period-label">3m</span>
+                            <span class="period-value ${benchmark.change3m === null ? 'no-data' : change3mClass}">${benchmark.change3m !== null ? getChangeSign(benchmark.change3m) + formatPercent(benchmark.change3m) + '%' : '-'}</span>
+                        </span>
+                        <span class="time-period">
+                            <span class="period-label">YTD</span>
+                            <span class="period-value ${benchmark.changePercent === null ? 'no-data' : changeYTDClass}">${benchmark.changePercent !== null ? getChangeSign(benchmark.changePercent) + formatPercent(benchmark.changePercent) + '%' : '-'}</span>
+                        </span>
+                    </div>
+                </div>
+                <div class="price-percent-combined desktop-only">
+                    <div class="time-periods">
+                        <span class="time-period">
+                            <span class="period-label">1d</span>
+                            <span class="period-value ${benchmark.change1d === null ? 'no-data' : change1dClass}">${benchmark.change1d !== null ? getChangeSign(benchmark.change1d) + formatPercent(benchmark.change1d) + '%' : '-'}</span>
+                        </span>
+                        <span class="time-period">
+                            <span class="period-label">1m</span>
+                            <span class="period-value ${benchmark.change1m === null ? 'no-data' : change1mClass}">${benchmark.change1m !== null ? getChangeSign(benchmark.change1m) + formatPercent(benchmark.change1m) + '%' : '-'}</span>
+                        </span>
+                        <span class="time-period">
+                            <span class="period-label">3m</span>
+                            <span class="period-value ${benchmark.change3m === null ? 'no-data' : change3mClass}">${benchmark.change3m !== null ? getChangeSign(benchmark.change3m) + formatPercent(benchmark.change3m) + '%' : '-'}</span>
+                        </span>
+                        <span class="time-period">
+                            <span class="period-label">YTD</span>
+                            <span class="period-value ${benchmark.changePercent === null ? 'no-data' : changeYTDClass}">${benchmark.changePercent !== null ? getChangeSign(benchmark.changePercent) + formatPercent(benchmark.changePercent) + '%' : '-'}</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    leaderboard.innerHTML = leaderboardHTML;
 }
 
 // Toggle analysis dropdown (global for onclick handler)

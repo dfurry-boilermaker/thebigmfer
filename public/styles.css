@@ -234,6 +234,18 @@ button:disabled {
     min-height: 60px;
 }
 
+.leaderboard-item.benchmark {
+    border-top: 2px solid #e0e0e0;
+    margin-top: 16px;
+    padding-top: 16px;
+    opacity: 0.85;
+}
+
+.leaderboard-item.benchmark .rank {
+    color: #999;
+    font-weight: 500;
+}
+
 .rank, .manager-info, .price-percent-combined {
     grid-row: 1;
 }

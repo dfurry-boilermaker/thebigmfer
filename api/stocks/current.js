@@ -201,6 +201,52 @@ module.exports = async (req, res) => {
             return bPercent - aPercent;
         });
         
+        // Fetch SPY (S&P 500) as benchmark
+        try {
+            const spyQuote = await yahooFinance.quote('SPY');
+            const spyBaselinePrice = await getBaselinePrices(['SPY']);
+            const spyBaseline = spyBaselinePrice[0];
+            
+            if (spyQuote && spyBaseline) {
+                const spyCurrentPrice = spyQuote.regularMarketPrice || spyQuote.price || spyQuote.regularMarketPreviousClose || 0;
+                const spyPreviousClose = spyQuote.regularMarketPreviousClose || spyBaseline || spyCurrentPrice;
+                
+                // Calculate YTD percentage change (price appreciation)
+                const spyYtdPriceChange = spyBaseline > 0 
+                    ? ((spyCurrentPrice - spyBaseline) / spyBaseline) * 100 
+                    : 0;
+                
+                // Get YTD dividends (as percentage)
+                const spyYtdDividendYield = await getYTDDividends('SPY', spyBaseline);
+                
+                // Calculate total return (price change + dividends)
+                const spyYtdChange = spyYtdPriceChange + spyYtdDividendYield;
+                
+                // Calculate 1d change
+                let spyChange1d = null;
+                if (spyPreviousClose && spyPreviousClose > 0) {
+                    spyChange1d = ((spyCurrentPrice - spyPreviousClose) / spyPreviousClose) * 100;
+                } else if (spyBaseline && spyBaseline > 0) {
+                    spyChange1d = ((spyCurrentPrice - spyBaseline) / spyBaseline) * 100;
+                }
+                
+                // Add SPY as benchmark (not ranked)
+                results.push({
+                    name: 'S&P 500',
+                    symbol: 'SPY',
+                    currentPrice: spyCurrentPrice,
+                    changePercent: spyYtdChange,
+                    change1d: spyChange1d,
+                    change1m: null,
+                    change3m: null,
+                    analysis: null,
+                    isBenchmark: true // Flag to indicate this is a benchmark, not a competitor
+                });
+            }
+        } catch (spyError) {
+            // If SPY fetch fails, continue without it (non-critical)
+        }
+        
         // Cache the results if we got valid data (even during market hours)
         if (results.length > 0 && results.some(r => r.changePercent !== null && r.currentPrice > 0)) {
             // Calculate TTL based on market hours
