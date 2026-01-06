@@ -1,6 +1,13 @@
 const YahooFinance = require('yahoo-finance2').default;
 const yahooFinance = new YahooFinance();
-const { getBaselinePrices } = require('./utils');
+const { 
+    getBaselinePrices, 
+    shouldUseCache, 
+    getCachedStockData, 
+    setCachedStockData, 
+    CACHE_KEYS,
+    isMarketOpen 
+} = require('./utils');
 
 module.exports = async (req, res) => {
     // Set CORS headers
@@ -14,6 +21,15 @@ module.exports = async (req, res) => {
     
     if (req.method !== 'GET') {
         return res.status(405).json({ error: 'Method not allowed' });
+    }
+    
+    // Check if we should use cached data (market is closed or rate limited)
+    const useCache = await shouldUseCache();
+    if (useCache) {
+        const cachedData = await getCachedStockData(CACHE_KEYS.CURRENT + ':indexes');
+        if (cachedData) {
+            return res.status(200).json(cachedData);
+        }
     }
     
     try {
@@ -124,12 +140,25 @@ module.exports = async (req, res) => {
             }
         }));
         
+        // Cache the results with appropriate TTL
+        // During market hours: 15 minutes (900 seconds)
+        // After hours/weekends: 24 hours (86400 seconds)
+        const ttlSeconds = isMarketOpen() ? 900 : 86400;
+        await setCachedStockData(CACHE_KEYS.CURRENT + ':indexes', results, ttlSeconds);
+        
         // Always return results even if some are null
         res.status(200).json(results);
     } catch (error) {
         console.error('Error fetching indexes:', error);
         console.error(error.stack);
-        // Return empty results instead of error to allow frontend to show mock data
+        
+        // If we have cached data, return it even on error
+        const cachedData = await getCachedStockData(CACHE_KEYS.CURRENT + ':indexes');
+        if (cachedData) {
+            return res.status(200).json(cachedData);
+        }
+        
+        // Return empty results if no cache available
         res.status(200).json([
             { symbol: 'SPY', name: 'S&P 500', currentPrice: null, changePercent: null, change1d: null },
             { symbol: 'QQQ', name: 'Nasdaq 100', currentPrice: null, changePercent: null, change1d: null },
