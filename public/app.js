@@ -1376,7 +1376,7 @@ function renderChart(chartData, currentData) {
                 layout: {
                     padding: {
                         right: isMobile ? 30 : 120,
-                        left: isMobile ? 30 : 20,
+                        left: isMobile ? 10 : 20,
                         top: isMobile ? 10 : 20,
                         bottom: isMobile ? 10 : 20
                     }
