@@ -535,6 +535,11 @@ async function fetchLeaderboardInBackground() {
         if (response.ok) {
             const data = await response.json();
             setCachedData(CACHE_KEYS.leaderboard, CACHE_KEYS.leaderboardTimestamp, data);
+            
+            // Update leaderboard display with fresh data
+            managerAnalyses = extractAnalysesFromLeaderboardData(data);
+            renderLeaderboard(data);
+            
             console.log('Background refresh: leaderboard data updated');
         }
     } catch (error) {
@@ -806,7 +811,15 @@ async function fetchChartInBackground(useMock) {
                 if (!useMock) {
                     setCachedData(CACHE_KEYS.chart, CACHE_KEYS.chartTimestamp, chartData);
                     setCachedData(CACHE_KEYS.leaderboard, CACHE_KEYS.leaderboardTimestamp, currentData);
-                    console.log('Background refresh: chart data updated');
+                    
+                    // Update leaderboard display with fresh data
+                    managerAnalyses = extractAnalysesFromLeaderboardData(currentData);
+                    renderLeaderboard(currentData);
+                    
+                    // Re-render chart with fresh data
+                    renderChart(chartData, currentData);
+                    
+                    console.log('Background refresh: chart and leaderboard data updated');
                 }
             }
         }
