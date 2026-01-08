@@ -862,7 +862,7 @@ function renderChart(chartData, currentData) {
         
         // Custom color mapping for specific managers
         const managerColors = {
-            'Greg': '#ec4899'  // Bright Pink/Magenta
+            'Greg': '#92400e'  // Brown
         };
         
         // Detect mobile device
