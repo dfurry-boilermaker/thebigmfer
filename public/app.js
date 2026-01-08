@@ -860,6 +860,11 @@ function renderChart(chartData, currentData) {
             '#ca8a04'   // Yellow
         ];
         
+        // Custom color mapping for specific managers
+        const managerColors = {
+            'Greg': '#ec4899'  // Bright Pink/Magenta
+        };
+        
         // Detect mobile device
         const isMobile = window.innerWidth < 768;
         
@@ -1096,7 +1101,8 @@ function renderChart(chartData, currentData) {
         });
         
         const datasets = chartData.data.map((stock, index) => {
-            const color = colors[index % colors.length];
+            // Check for custom color first, then fall back to index-based assignment
+            const color = managerColors[stock.name] || colors[index % colors.length];
             const data = stock.data || [];
             const timestamps = stock.timestamps || [];
             
