@@ -1917,12 +1917,23 @@ function renderIndexes(data) {
             ? getChangeSign(index.changePercent) + formatPercent(index.changePercent) + '%' 
             : '-';
         
+        const change1dClass = index.change1d !== null ? (index.change1d >= 0 ? 'positive' : 'negative') : 'no-data';
+        const change1dValue = index.change1d !== null 
+            ? getChangeSign(index.change1d) + formatPercent(index.change1d) + '%' 
+            : '-';
+        
         return `
             <div class="index-item">
                 <span class="index-symbol">${escapeHtml(index.symbol)}</span>
-                <span class="index-ytd-wrapper">
-                    <span class="index-ytd ${changePercentClass}">${ytdValue}</span>
-                    <span class="index-ytd-label">YTD</span>
+                <span class="index-changes">
+                    <span class="index-ytd-wrapper">
+                        <span class="index-ytd ${changePercentClass}">${ytdValue}</span>
+                        <span class="index-ytd-label">YTD</span>
+                    </span>
+                    <span class="index-1d-wrapper">
+                        <span class="index-1d ${change1dClass}">${change1dValue}</span>
+                        <span class="index-1d-label">1d</span>
+                    </span>
                 </span>
             </div>
         `;

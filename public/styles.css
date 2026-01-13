@@ -227,6 +227,12 @@ button:disabled {
     color: #1a1a1a;
 }
 
+.index-changes {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
 .index-ytd-wrapper {
     display: flex;
     align-items: baseline;
@@ -258,6 +264,37 @@ button:disabled {
     letter-spacing: 0.5px;
 }
 
+.index-1d-wrapper {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+}
+
+.index-1d {
+    font-size: 0.9375rem;
+    font-weight: 600;
+}
+
+.index-1d.positive {
+    color: #10b981;
+}
+
+.index-1d.negative {
+    color: #ef4444;
+}
+
+.index-1d.no-data {
+    color: #8a8a8a;
+}
+
+.index-1d-label {
+    font-size: 0.6875rem;
+    font-weight: 400;
+    color: #8a8a8a;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
 @media (max-width: 768px) {
     .indexes-section {
         padding: 0 20px;
@@ -281,11 +318,23 @@ button:disabled {
         font-size: 0.875rem;
     }
     
+    .index-changes {
+        gap: 12px;
+    }
+    
     .index-ytd {
         font-size: 0.875rem;
     }
     
     .index-ytd-label {
+        font-size: 0.625rem;
+    }
+    
+    .index-1d {
+        font-size: 0.875rem;
+    }
+    
+    .index-1d-label {
         font-size: 0.625rem;
     }
 }
@@ -313,11 +362,23 @@ button:disabled {
         font-size: 0.8125rem;
     }
     
+    .index-changes {
+        gap: 10px;
+    }
+    
     .index-ytd {
         font-size: 0.8125rem;
     }
     
     .index-ytd-label {
+        font-size: 0.5625rem;
+    }
+    
+    .index-1d {
+        font-size: 0.8125rem;
+    }
+    
+    .index-1d-label {
         font-size: 0.5625rem;
     }
 }
