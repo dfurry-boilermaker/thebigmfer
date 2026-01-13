@@ -301,41 +301,41 @@ button:disabled {
     }
     
     .indexes-section h2 {
-        font-size: 1.125rem;
-        margin-bottom: 12px;
+        font-size: 1rem;
+        margin-bottom: 10px;
     }
     
     .indexes {
-        gap: 12px;
-    }
-    
-    .index-item {
-        padding: 10px 16px;
         gap: 10px;
     }
     
+    .index-item {
+        padding: 8px 14px;
+        gap: 8px;
+    }
+    
     .index-symbol {
-        font-size: 0.875rem;
+        font-size: 0.8125rem;
     }
     
     .index-changes {
-        gap: 12px;
+        gap: 10px;
     }
     
     .index-ytd {
-        font-size: 0.875rem;
+        font-size: 0.8125rem;
     }
     
     .index-ytd-label {
-        font-size: 0.625rem;
+        font-size: 0.5625rem;
     }
     
     .index-1d {
-        font-size: 0.875rem;
+        font-size: 0.8125rem;
     }
     
     .index-1d-label {
-        font-size: 0.625rem;
+        font-size: 0.5625rem;
     }
 }
 
@@ -345,41 +345,41 @@ button:disabled {
     }
     
     .indexes-section h2 {
-        font-size: 1rem;
-        margin-bottom: 10px;
+        font-size: 0.9375rem;
+        margin-bottom: 8px;
     }
     
     .indexes {
-        gap: 8px;
+        gap: 6px;
     }
     
     .index-item {
-        padding: 8px 12px;
-        gap: 8px;
+        padding: 6px 10px;
+        gap: 6px;
     }
     
     .index-symbol {
-        font-size: 0.8125rem;
+        font-size: 0.75rem;
     }
     
     .index-changes {
-        gap: 10px;
+        gap: 8px;
     }
     
     .index-ytd {
-        font-size: 0.8125rem;
+        font-size: 0.75rem;
     }
     
     .index-ytd-label {
-        font-size: 0.5625rem;
+        font-size: 0.5rem;
     }
     
     .index-1d {
-        font-size: 0.8125rem;
+        font-size: 0.75rem;
     }
     
     .index-1d-label {
-        font-size: 0.5625rem;
+        font-size: 0.5rem;
     }
 }
 
