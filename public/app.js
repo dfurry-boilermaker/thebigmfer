@@ -994,26 +994,34 @@ function renderChart(chartData, currentData) {
         }
         
         // Add daily dates for current month (if we have daily data)
-        if (dailyDataCount > 0 && labels.length > 0) {
-            if (lastMonthIndex !== -1) {
-                // Check if this is mock data and adjust accordingly
-                const useMock = new URLSearchParams(window.location.search).get('mock') === 'true';
+        if (dailyDataCount > 0 && labels.length > 0 && lastMonthIndex !== -1 && lastMonthIndex >= 0 && lastMonthIndex < 12) {
+            // Check if this is mock data and adjust accordingly
+            const useMock = new URLSearchParams(window.location.search).get('mock') === 'true';
+            
+            if (useMock && lastMonthName === 'Jul') {
+                // For mock data in July, space the daily points to cover up to July 17
+                const targetLastDay = 17; // Mock data goes up to July 17
+                const step = (targetLastDay - 1) / (dailyDataCount - 1);
                 
-                if (useMock && lastMonthName === 'Jul') {
-                    // For mock data in July, space the daily points to cover up to July 17
-                    const targetLastDay = 17; // Mock data goes up to July 17
-                    const step = (targetLastDay - 1) / (dailyDataCount - 1);
-                    
-                    for (let i = 0; i < dailyDataCount; i++) {
-                        const day = Math.round(1 + (i * step));
-                        dates.push(new Date(currentYear, lastMonthIndex, Math.min(day, targetLastDay)));
+                for (let i = 0; i < dailyDataCount; i++) {
+                    const day = Math.round(1 + (i * step));
+                    const date = new Date(currentYear, lastMonthIndex, Math.min(day, targetLastDay));
+                    if (!isNaN(date.getTime())) {
+                        dates.push(date);
                     }
-                } else {
-                    // For real data, start from the first trading day of the month
-                    // Jan 1, 2026 is a holiday, so first trading day is Jan 2
-                    const firstTradingDay = (lastMonthIndex === 0 && currentYear === 2026) ? 2 : 1;
-                    for (let i = 0; i < dailyDataCount; i++) {
-                        dates.push(new Date(currentYear, lastMonthIndex, firstTradingDay + i));
+                }
+            } else {
+                // For real data, start from the first trading day of the month
+                // Jan 1, 2026 is a holiday, so first trading day is Jan 2
+                const firstTradingDay = (lastMonthIndex === 0 && currentYear === 2026) ? 2 : 1;
+                for (let i = 0; i < dailyDataCount; i++) {
+                    const day = firstTradingDay + i;
+                    // Ensure day is valid (not exceeding month length)
+                    const date = new Date(currentYear, lastMonthIndex, day);
+                    if (!isNaN(date.getTime())) {
+                        dates.push(date);
+                    } else {
+                        console.warn(`Invalid date created: ${currentYear}-${lastMonthIndex + 1}-${day}`);
                     }
                 }
             }
