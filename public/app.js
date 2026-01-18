@@ -853,175 +853,207 @@ function renderChart(chartData, currentData) {
         return;
     }
 
-        // Enhanced colors with better contrast and visibility
-        const colors = [
-            '#2563eb',  // Blue
-            '#059669',  // Green
-            '#dc2626',  // Red
-            '#d97706',  // Amber
-            '#7c3aed',  // Purple
-            '#db2777',  // Pink
-            '#0d9488',  // Teal
-            '#ea580c',  // Orange
-            '#16a34a',  // Emerald
-            '#9333ea',  // Violet
-            '#0284c7',  // Sky Blue
-            '#ca8a04'   // Yellow
+    // Enhanced colors with better contrast and visibility
+    const colors = [
+        '#2563eb',  // Blue
+        '#059669',  // Green
+        '#dc2626',  // Red
+        '#d97706',  // Amber
+        '#7c3aed',  // Purple
+        '#db2777',  // Pink
+        '#0d9488',  // Teal
+        '#ea580c',  // Orange
+        '#16a34a',  // Emerald
+        '#9333ea',  // Violet
+        '#0284c7',  // Sky Blue
+        '#ca8a04'   // Yellow
+    ];
+    
+    // Custom color mapping for specific managers
+    const managerColors = {
+        'Greg': '#92400e'  // Brown
+    };
+    
+    // Detect mobile device
+    const isMobile = window.innerWidth < 768;
+    
+    // Get labels from backend
+    const labels = chartData.months || [];
+    
+    // Calculate dates for all data points (constant time frame)
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const currentYear = 2026;
+    const firstTradingDay = new Date(2026, 0, 2); // Jan 2, 2026 - first trading day
+    
+    // Calculate dates for each data point
+    // Note: Data now starts from Jan 2, 2026 (no Dec 31 baseline in display)
+    const dates = [];
+    
+    // Helper function to check if a date is a trading day (reusable)
+    const isTradingDay = (date) => {
+        const day = date.getDay();
+        if (day === 0 || day === 6) return false; // Weekend
+        // Check 2026 holidays
+        const month = date.getMonth();
+        const dayOfMonth = date.getDate();
+        const holidays2026 = [
+            { month: 0, day: 1 }, { month: 0, day: 19 },
+            { month: 1, day: 16 }, { month: 3, day: 3 },
+            { month: 4, day: 25 }, { month: 6, day: 3 },
+            { month: 8, day: 7 }, { month: 10, day: 11 },
+            { month: 10, day: 26 }, { month: 11, day: 25 }
         ];
+        return !holidays2026.some(h => h.month === month && h.day === dayOfMonth);
+    };
+    
+    // Helper function to parse label (e.g., "Jan 2" or "Jan")
+    const parseLabel = (label) => {
+        const parts = label.trim().split(/\s+/);
+        const monthName = parts[0];
+        const day = parts.length > 1 ? parseInt(parts[1]) : null;
+        const monthIndex = monthNames.indexOf(monthName);
+        return { monthIndex, day, monthName };
+    };
+    
+    // Calculate daily data count
+    const baselineCount = 1;
+    const maxDataPoints = Math.max(...chartData.data.map(d => (d.data || []).length));
+    
+    // Check if labels contain specific days (e.g., "Jan 2") or just months (e.g., "Jan")
+    const hasSpecificDays = labels.length > 0 && labels[0].includes(' ');
+    
+    if (hasSpecificDays) {
+        // Labels contain specific days - parse them directly
+        // Structure: baseline + daily data points for each label
+        // We need (maxDataPoints - 1) dates after baseline
+        const datesNeeded = maxDataPoints - 1;
         
-        // Custom color mapping for specific managers
-        const managerColors = {
-            'Greg': '#92400e'  // Brown
-        };
-        
-        // Detect mobile device
-        const isMobile = window.innerWidth < 768;
-        
-        // Get labels from backend
-        const labels = chartData.months || [];
-        
-        // Calculate dates for all data points (constant time frame)
-        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const currentYear = 2026;
-        const firstTradingDay = new Date(2026, 0, 2); // Jan 2, 2026 - first trading day
-        
-        // Calculate dates for each data point
-        // Note: Data now starts from Jan 2, 2026 (no Dec 31 baseline in display)
-        const dates = [];
-        
-        // Helper function to check if a date is a trading day (reusable)
-        const isTradingDay = (date) => {
-            const day = date.getDay();
-            if (day === 0 || day === 6) return false; // Weekend
-            // Check 2026 holidays
-            const month = date.getMonth();
-            const dayOfMonth = date.getDate();
-            const holidays2026 = [
-                { month: 0, day: 1 }, { month: 0, day: 19 },
-                { month: 1, day: 16 }, { month: 3, day: 3 },
-                { month: 4, day: 25 }, { month: 6, day: 3 },
-                { month: 8, day: 7 }, { month: 10, day: 11 },
-                { month: 10, day: 26 }, { month: 11, day: 25 }
-            ];
-            return !holidays2026.some(h => h.month === month && h.day === dayOfMonth);
-        };
-        
-        // Helper function to parse label (e.g., "Jan 2" or "Jan")
-        const parseLabel = (label) => {
-            const parts = label.trim().split(/\s+/);
-            const monthName = parts[0];
-            const day = parts.length > 1 ? parseInt(parts[1]) : null;
-            const monthIndex = monthNames.indexOf(monthName);
-            return { monthIndex, day, monthName };
-        };
-        
-        // Calculate daily data count
-        const baselineCount = 1;
-        const maxDataPoints = Math.max(...chartData.data.map(d => (d.data || []).length));
-        
-        // Check if labels contain specific days (e.g., "Jan 2") or just months (e.g., "Jan")
-        const hasSpecificDays = labels.length > 0 && labels[0].includes(' ');
-        
-        if (hasSpecificDays) {
-            // Labels contain specific days - parse them directly
-            // Structure: baseline + daily data points for each label
-            // We need (maxDataPoints - 1) dates after baseline
-            const datesNeeded = maxDataPoints - 1;
-            
-            if (labels.length >= datesNeeded) {
-                // We have enough labels, use them directly (but filter out weekends/holidays)
-                for (let i = 0; i < datesNeeded; i++) {
-                    const { monthIndex, day } = parseLabel(labels[i]);
-                    if (monthIndex !== -1 && day !== null) {
-                        const date = new Date(currentYear, monthIndex, day);
-                        // Only add if it's a trading day
-                        if (isTradingDay(date)) {
-                            dates.push(date);
-                        }
-                    }
-                }
-            } else {
-                // We have fewer labels than needed, use labels and fill remaining
-                for (let i = 0; i < labels.length; i++) {
-                    const { monthIndex, day } = parseLabel(labels[i]);
-                    if (monthIndex !== -1 && day !== null) {
-                        const date = new Date(currentYear, monthIndex, day);
-                        // Only add if it's a trading day
-                        if (isTradingDay(date)) {
-                            dates.push(date);
-                        }
-                    }
-                }
-                // Fill remaining dates sequentially from last label, but only use trading days up to today
-                if (labels.length > 0) {
-                    const lastLabel = parseLabel(labels[labels.length - 1]);
-                    if (lastLabel.monthIndex !== -1 && lastLabel.day !== null) {
-                        const today = new Date();
-                        today.setHours(23, 59, 59, 999);
-                        let currentDate = new Date(currentYear, lastLabel.monthIndex, lastLabel.day);
-                        while (dates.length < maxDataPoints && currentDate <= today) {
-                            currentDate.setDate(currentDate.getDate() + 1);
-                            // Only add trading days up to today
-                            if (isTradingDay(currentDate) && currentDate <= today) {
-                                dates.push(new Date(currentDate));
-                            }
-                        }
+        if (labels.length >= datesNeeded) {
+            // We have enough labels, use them directly (but filter out weekends/holidays)
+            for (let i = 0; i < datesNeeded; i++) {
+                const { monthIndex, day } = parseLabel(labels[i]);
+                if (monthIndex !== -1 && day !== null) {
+                    const date = new Date(currentYear, monthIndex, day);
+                    // Only add if it's a trading day
+                    if (isTradingDay(date)) {
+                        dates.push(date);
                     }
                 }
             }
         } else {
-            // Labels are just months - use month-end dates
-            // But exclude the last month's month-end if we have daily data for it
-            const lastMonthName = labels.length > 0 ? labels[labels.length - 1] : null;
-            const { monthIndex: lastMonthIndex } = lastMonthName ? parseLabel(lastMonthName) : { monthIndex: -1 };
-            
-            // Calculate daily data count first to determine if we need to exclude last month-end
-            const monthEndCount = labels.length;
-            const dailyDataCount = maxDataPoints - baselineCount - monthEndCount;
-            const hasDailyDataForLastMonth = dailyDataCount > 0;
-            
-            // Add month-end dates, but exclude the last month if we have daily data for it
+            // We have fewer labels than needed, use labels and fill remaining
             for (let i = 0; i < labels.length; i++) {
-                const { monthIndex } = parseLabel(labels[i]);
-                if (monthIndex !== -1) {
-                    // Skip the last month's month-end if we have daily data for it
-                    if (hasDailyDataForLastMonth && i === labels.length - 1 && monthIndex === lastMonthIndex) {
-                        continue; // Skip adding month-end date for the last month
+                const { monthIndex, day } = parseLabel(labels[i]);
+                if (monthIndex !== -1 && day !== null) {
+                    const date = new Date(currentYear, monthIndex, day);
+                    // Only add if it's a trading day
+                    if (isTradingDay(date)) {
+                        dates.push(date);
                     }
-                    const lastDay = new Date(currentYear, monthIndex + 1, 0).getDate();
-                    dates.push(new Date(currentYear, monthIndex, lastDay));
                 }
             }
-            
-            // Add daily dates for current month (if we have daily data)
-            if (dailyDataCount > 0 && labels.length > 0) {
-                if (lastMonthIndex !== -1) {
-                    // Check if this is mock data and adjust accordingly
-                    const useMock = new URLSearchParams(window.location.search).get('mock') === 'true';
-                    
-                    if (useMock && lastMonthName === 'Jul') {
-                        // For mock data in July, space the daily points to cover up to July 17
-                        const targetLastDay = 17; // Mock data goes up to July 17
-                        const step = (targetLastDay - 1) / (dailyDataCount - 1);
-                        
-                        for (let i = 0; i < dailyDataCount; i++) {
-                            const day = Math.round(1 + (i * step));
-                            dates.push(new Date(currentYear, lastMonthIndex, Math.min(day, targetLastDay)));
-                        }
-                    } else {
-                        // For real data, start from the first trading day of the month
-                        // Jan 1, 2026 is a holiday, so first trading day is Jan 2
-                        const firstTradingDay = (lastMonthIndex === 0 && currentYear === 2026) ? 2 : 1;
-                        for (let i = 0; i < dailyDataCount; i++) {
-                            dates.push(new Date(currentYear, lastMonthIndex, firstTradingDay + i));
+            // Fill remaining dates sequentially from last label, but only use trading days up to today
+            if (labels.length > 0) {
+                const lastLabel = parseLabel(labels[labels.length - 1]);
+                if (lastLabel.monthIndex !== -1 && lastLabel.day !== null) {
+                    const today = new Date();
+                    today.setHours(23, 59, 59, 999);
+                    let currentDate = new Date(currentYear, lastLabel.monthIndex, lastLabel.day);
+                    while (dates.length < maxDataPoints && currentDate <= today) {
+                        currentDate.setDate(currentDate.getDate() + 1);
+                        // Only add trading days up to today
+                        if (isTradingDay(currentDate) && currentDate <= today) {
+                            dates.push(new Date(currentDate));
                         }
                     }
                 }
             }
         }
+    } else {
+        // Labels are just months - use month-end dates
+        // But exclude the last month's month-end if we have daily data for it
+        const lastMonthName = labels.length > 0 ? labels[labels.length - 1] : null;
+        const { monthIndex: lastMonthIndex } = lastMonthName ? parseLabel(lastMonthName) : { monthIndex: -1 };
         
-        // Ensure we have dates for all data points (only trading days)
-        while (dates.length < maxDataPoints) {
+        // Calculate daily data count first to determine if we need to exclude last month-end
+        const monthEndCount = labels.length;
+        const dailyDataCount = maxDataPoints - baselineCount - monthEndCount;
+        const hasDailyDataForLastMonth = dailyDataCount > 0;
+        
+        // Add month-end dates, but exclude the last month if we have daily data for it
+        for (let i = 0; i < labels.length; i++) {
+            const { monthIndex } = parseLabel(labels[i]);
+            if (monthIndex !== -1) {
+                // Skip the last month's month-end if we have daily data for it
+                if (hasDailyDataForLastMonth && i === labels.length - 1 && monthIndex === lastMonthIndex) {
+                    continue; // Skip adding month-end date for the last month
+                }
+                const lastDay = new Date(currentYear, monthIndex + 1, 0).getDate();
+                dates.push(new Date(currentYear, monthIndex, lastDay));
+            }
+        }
+        
+        // Add daily dates for current month (if we have daily data)
+        if (dailyDataCount > 0 && labels.length > 0) {
+            if (lastMonthIndex !== -1) {
+                // Check if this is mock data and adjust accordingly
+                const useMock = new URLSearchParams(window.location.search).get('mock') === 'true';
+                
+                if (useMock && lastMonthName === 'Jul') {
+                    // For mock data in July, space the daily points to cover up to July 17
+                    const targetLastDay = 17; // Mock data goes up to July 17
+                    const step = (targetLastDay - 1) / (dailyDataCount - 1);
+                    
+                    for (let i = 0; i < dailyDataCount; i++) {
+                        const day = Math.round(1 + (i * step));
+                        dates.push(new Date(currentYear, lastMonthIndex, Math.min(day, targetLastDay)));
+                    }
+                } else {
+                    // For real data, start from the first trading day of the month
+                    // Jan 1, 2026 is a holiday, so first trading day is Jan 2
+                    const firstTradingDay = (lastMonthIndex === 0 && currentYear === 2026) ? 2 : 1;
+                    for (let i = 0; i < dailyDataCount; i++) {
+                        dates.push(new Date(currentYear, lastMonthIndex, firstTradingDay + i));
+                    }
+                }
+            }
+        }
+    }
+    
+    // Ensure we have dates for all data points (only trading days)
+    while (dates.length < maxDataPoints) {
+        const lastDate = new Date(dates[dates.length - 1]);
+        lastDate.setDate(lastDate.getDate() + 1);
+        // Only add if it's a trading day
+        while (!isTradingDay(lastDate) && dates.length < maxDataPoints) {
+            lastDate.setDate(lastDate.getDate() + 1);
+        }
+        if (dates.length < maxDataPoints) {
+            dates.push(new Date(lastDate));
+        }
+    }
+    
+    // Trim to exact number of data points
+    if (dates.length > maxDataPoints) {
+        dates.length = maxDataPoints;
+    }
+    
+    // Debug: log date calculation
+    console.log('Date calculation:', {
+        maxDataPoints,
+        datesCount: dates.length,
+        firstDate: dates[0]?.toISOString(),
+        lastDate: dates[dates.length - 1]?.toISOString(),
+        labels,
+        hasSpecificDays,
+        dates: dates.map(d => d.toISOString().split('T')[0])
+    });
+    
+    // Ensure we have exactly maxDataPoints dates (only trading days)
+    if (dates.length !== maxDataPoints) {
+        console.warn(`Date count mismatch: expected ${maxDataPoints}, got ${dates.length}`);
+        // Fill or trim to match (only trading days)
+        while (dates.length < maxDataPoints && dates.length > 0) {
             const lastDate = new Date(dates[dates.length - 1]);
             lastDate.setDate(lastDate.getDate() + 1);
             // Only add if it's a trading day
@@ -1032,258 +1064,226 @@ function renderChart(chartData, currentData) {
                 dates.push(new Date(lastDate));
             }
         }
-        
-        // Trim to exact number of data points
         if (dates.length > maxDataPoints) {
             dates.length = maxDataPoints;
         }
-        
-        // Debug: log date calculation
-        console.log('Date calculation:', {
-            maxDataPoints,
-            datesCount: dates.length,
-            firstDate: dates[0]?.toISOString(),
-            lastDate: dates[dates.length - 1]?.toISOString(),
-            labels,
-            hasSpecificDays,
-            dates: dates.map(d => d.toISOString().split('T')[0])
-        });
-        
-        // Ensure we have exactly maxDataPoints dates (only trading days)
-        if (dates.length !== maxDataPoints) {
-            console.warn(`Date count mismatch: expected ${maxDataPoints}, got ${dates.length}`);
-            // Fill or trim to match (only trading days)
-            while (dates.length < maxDataPoints && dates.length > 0) {
-                const lastDate = new Date(dates[dates.length - 1]);
-                lastDate.setDate(lastDate.getDate() + 1);
-                // Only add if it's a trading day
-                while (!isTradingDay(lastDate) && dates.length < maxDataPoints) {
-                    lastDate.setDate(lastDate.getDate() + 1);
-                }
-                if (dates.length < maxDataPoints) {
-                    dates.push(new Date(lastDate));
-                }
-            }
-            if (dates.length > maxDataPoints) {
-                dates.length = maxDataPoints;
-            }
-        }
-        
-        // Create a mapping of timestamps to sequential trading day indices
-        // This will compress weekends so Friday flows directly into Monday
-        const today = new Date();
-        today.setHours(23, 59, 59, 999); // End of today
-        const todayTimestamp = today.getTime();
-        
-        const allUniqueTimestamps = [];
-        chartData.data.forEach(stock => {
-            const timestamps = stock.timestamps || [];
-            timestamps.forEach((ts, idx) => {
-                // Only include timestamps from Jan 2, 2026 up to today (no future dates)
-                if (ts && ts >= firstTradingDay.getTime() && ts <= todayTimestamp && !allUniqueTimestamps.includes(ts)) {
-                    allUniqueTimestamps.push(ts);
-                }
-            });
-        });
-        // Also add dates from the dates array if they're not already included (but only up to today)
-        dates.forEach(date => {
-            const ts = date.getTime();
-            if (ts >= firstTradingDay.getTime() && ts <= todayTimestamp && !allUniqueTimestamps.includes(ts)) {
+    }
+    
+    // Create a mapping of timestamps to sequential trading day indices
+    // This will compress weekends so Friday flows directly into Monday
+    const today = new Date();
+    today.setHours(23, 59, 59, 999); // End of today
+    const todayTimestamp = today.getTime();
+    
+    const allUniqueTimestamps = [];
+    chartData.data.forEach(stock => {
+        const timestamps = stock.timestamps || [];
+        timestamps.forEach((ts, idx) => {
+            // Only include timestamps from Jan 2, 2026 up to today (no future dates)
+            if (ts && ts >= firstTradingDay.getTime() && ts <= todayTimestamp && !allUniqueTimestamps.includes(ts)) {
                 allUniqueTimestamps.push(ts);
             }
         });
-        // Sort timestamps and create index mapping (only up to today)
-        allUniqueTimestamps.sort((a, b) => a - b);
-        // Filter out future timestamps before creating the mapping
-        const filteredTimestamps = allUniqueTimestamps.filter(ts => ts <= todayTimestamp);
-        const timestampToIndex = new Map();
-        filteredTimestamps.forEach((ts, idx) => {
-            timestampToIndex.set(ts, idx);
-        });
+    });
+    // Also add dates from the dates array if they're not already included (but only up to today)
+    dates.forEach(date => {
+        const ts = date.getTime();
+        if (ts >= firstTradingDay.getTime() && ts <= todayTimestamp && !allUniqueTimestamps.includes(ts)) {
+            allUniqueTimestamps.push(ts);
+        }
+    });
+    // Sort timestamps and create index mapping (only up to today)
+    allUniqueTimestamps.sort((a, b) => a - b);
+    // Filter out future timestamps before creating the mapping
+    const filteredTimestamps = allUniqueTimestamps.filter(ts => ts <= todayTimestamp);
+    const timestampToIndex = new Map();
+    filteredTimestamps.forEach((ts, idx) => {
+        timestampToIndex.set(ts, idx);
+    });
+    
+    // Create label mapping from trading day indices to dates (only up to today)
+    const indexToDateLabel = new Map();
+    filteredTimestamps.forEach((ts, idx) => {
+        const date = new Date(ts);
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        indexToDateLabel.set(idx, `${monthNames[date.getMonth()]} ${date.getDate()}`);
+    });
+    
+    const datasets = chartData.data.map((stock, index) => {
+        // Check for custom color first, then fall back to index-based assignment
+        const color = managerColors[stock.name] || colors[index % colors.length];
+        const data = stock.data || [];
+        const timestamps = stock.timestamps || [];
         
-        // Create label mapping from trading day indices to dates (only up to today)
-        const indexToDateLabel = new Map();
-        filteredTimestamps.forEach((ts, idx) => {
-            const date = new Date(ts);
-            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            indexToDateLabel.set(idx, `${monthNames[date.getMonth()]} ${date.getDate()}`);
-        });
+        // Get the symbol to look up current YTD
+        const symbol = stock.symbol;
+        const currentYTD = ytdMap[symbol];
         
-        const datasets = chartData.data.map((stock, index) => {
-            // Check for custom color first, then fall back to index-based assignment
-            const color = managerColors[stock.name] || colors[index % colors.length];
-            const data = stock.data || [];
-            const timestamps = stock.timestamps || [];
+        // Use timestamps from API if available, otherwise fall back to calculated dates
+        // Filter out any data points before Jan 2, 2026
+        const firstTradingDayTimestamp = firstTradingDay.getTime();
+        const timeData = data.map((value, idx) => {
+            let timestamp;
+            if (timestamps.length > idx && timestamps[idx]) {
+                timestamp = timestamps[idx];
+            } else {
+                const date = dates[idx] || dates[0] || firstTradingDay;
+                timestamp = date.getTime();
+            }
             
-            // Get the symbol to look up current YTD
-            const symbol = stock.symbol;
-            const currentYTD = ytdMap[symbol];
+            // Skip data points before Jan 2, 2026 or after today
+            if (timestamp < firstTradingDayTimestamp || timestamp > todayTimestamp) {
+                return null;
+            }
             
-            // Use timestamps from API if available, otherwise fall back to calculated dates
-            // Filter out any data points before Jan 2, 2026
-            const firstTradingDayTimestamp = firstTradingDay.getTime();
-            const timeData = data.map((value, idx) => {
-                let timestamp;
-                if (timestamps.length > idx && timestamps[idx]) {
-                    timestamp = timestamps[idx];
-                } else {
-                    const date = dates[idx] || dates[0] || firstTradingDay;
-                    timestamp = date.getTime();
+            // Map timestamp to sequential trading day index (compresses weekends)
+            // Only process timestamps up to today
+            if (timestamp > todayTimestamp) {
+                return null;
+            }
+            
+            let tradingDayIndex = timestampToIndex.get(timestamp);
+            if (tradingDayIndex === undefined) {
+                // If timestamp not in map, add it (but only if it's not in the future)
+                if (timestamp <= todayTimestamp && !allUniqueTimestamps.includes(timestamp)) {
+                    allUniqueTimestamps.push(timestamp);
+                    allUniqueTimestamps.sort((a, b) => a - b);
+                    // Rebuild maps, filtering out future dates
+                    timestampToIndex.clear();
+                    indexToDateLabel.clear();
+                    allUniqueTimestamps.forEach((ts, i) => {
+                        // Only include timestamps up to today
+                        if (ts <= todayTimestamp) {
+                            timestampToIndex.set(ts, i);
+                            const date = new Date(ts);
+                            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                            indexToDateLabel.set(i, `${monthNames[date.getMonth()]} ${date.getDate()}`);
+                        }
+                    });
+                    tradingDayIndex = timestampToIndex.get(timestamp);
                 }
-                
-                // Skip data points before Jan 2, 2026 or after today
-                if (timestamp < firstTradingDayTimestamp || timestamp > todayTimestamp) {
-                    return null;
-                }
-                
-                // Map timestamp to sequential trading day index (compresses weekends)
-                // Only process timestamps up to today
-                if (timestamp > todayTimestamp) {
-                    return null;
-                }
-                
-                let tradingDayIndex = timestampToIndex.get(timestamp);
                 if (tradingDayIndex === undefined) {
-                    // If timestamp not in map, add it (but only if it's not in the future)
-                    if (timestamp <= todayTimestamp && !allUniqueTimestamps.includes(timestamp)) {
-                        allUniqueTimestamps.push(timestamp);
-                        allUniqueTimestamps.sort((a, b) => a - b);
-                        // Rebuild maps, filtering out future dates
-                        timestampToIndex.clear();
-                        indexToDateLabel.clear();
-                        allUniqueTimestamps.forEach((ts, i) => {
-                            // Only include timestamps up to today
-                            if (ts <= todayTimestamp) {
-                                timestampToIndex.set(ts, i);
-                                const date = new Date(ts);
-                                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                                indexToDateLabel.set(i, `${monthNames[date.getMonth()]} ${date.getDate()}`);
-                            }
-                        });
-                        tradingDayIndex = timestampToIndex.get(timestamp);
-                    }
-                    if (tradingDayIndex === undefined) {
-                        return null;
-                    }
+                    return null;
                 }
-                
-                // For the last data point, always use current YTD from leaderboard to ensure accuracy
-                // This ensures chart labels match leaderboard YTD values
-                let yValue = value;
-                if (idx === data.length - 1 && currentYTD !== null && currentYTD !== undefined) {
-                    yValue = currentYTD;
-                }
-                
-                return {
-                    x: tradingDayIndex,
-                    y: yValue
-                };
-            }).filter(point => point !== null); // Remove null entries
+            }
             
-            // Calculate adaptive tension based on data density
-            // More data points = smoother lines (lower tension)
-            // Fewer data points = more responsive (higher tension)
-            let adaptiveTension = 0.1; // Default - smoother
-            if (timeData.length > 0) {
-                const indexSpan = timeData[timeData.length - 1].x - timeData[0].x;
-                // Since x is now trading day index, we can estimate data density
-                // Each index represents one trading day
-                const dataPointsPerTradingDay = timeData.length / Math.max(1, indexSpan);
-                
-                // Adjust tension based on data density (lower values = smoother)
-                if (dataPointsPerTradingDay > 6) {
-                    // High density (hourly data) - very smooth
-                    adaptiveTension = 0.05;
-                } else if (dataPointsPerTradingDay > 1) {
-                    // Medium density (daily data) - smooth
-                    adaptiveTension = 0.1;
-                } else {
-                    // Low density (monthly data) - moderately smooth
-                    adaptiveTension = 0.2;
-                }
+            // For the last data point, always use current YTD from leaderboard to ensure accuracy
+            // This ensures chart labels match leaderboard YTD values
+            let yValue = value;
+            if (idx === data.length - 1 && currentYTD !== null && currentYTD !== undefined) {
+                yValue = currentYTD;
             }
             
             return {
-                label: `${stock.name} (${stock.symbol})`,
-                data: timeData,
-                borderColor: color,
-                backgroundColor: color,
-                borderWidth: isMobile ? 1.5 : 2,
-                fill: false,
-                tension: adaptiveTension,
-                pointRadius: 0,
-                pointHoverRadius: 0,
-                pointBackgroundColor: color,
-                pointBorderColor: '#ffffff',
-                pointBorderWidth: 0,
-                pointHoverBorderWidth: 0
+                x: tradingDayIndex,
+                y: yValue
             };
-        });
-
-        // Filter out datasets with no data first
-        const validDatasets = datasets.filter(d => d.data && d.data.length > 0);
+        }).filter(point => point !== null); // Remove null entries
         
-        if (validDatasets.length === 0) {
-            console.error('All datasets have no data after filtering', {
-                originalDatasetsCount: datasets.length,
-                datasets: datasets.map(d => ({
-                    label: d.label,
-                    dataLength: d.data ? d.data.length : 0
-                }))
-            });
-            return;
-        }
-        
-        // Calculate min and max trading day indices (for linear scale)
-        let minIndex = 0;
-        let maxIndex = 0;
-        
-        if (validDatasets.length > 0 && validDatasets[0].data.length > 0) {
-            // Find min/max indices from all valid datasets
-            const allIndices = [];
-            validDatasets.forEach(dataset => {
-                if (dataset.data && dataset.data.length > 0) {
-                    dataset.data.forEach(point => {
-                        if (point.x !== null && point.x !== undefined) {
-                            allIndices.push(point.x);
-                        }
-                    });
-                }
-            });
+        // Calculate adaptive tension based on data density
+        // More data points = smoother lines (lower tension)
+        // Fewer data points = more responsive (higher tension)
+        let adaptiveTension = 0.1; // Default - smoother
+        if (timeData.length > 0) {
+            const indexSpan = timeData[timeData.length - 1].x - timeData[0].x;
+            // Since x is now trading day index, we can estimate data density
+            // Each index represents one trading day
+            const dataPointsPerTradingDay = timeData.length / Math.max(1, indexSpan);
             
-            if (allIndices.length > 0) {
-                minIndex = Math.min(...allIndices);
-                maxIndex = Math.max(...allIndices);
+            // Adjust tension based on data density (lower values = smoother)
+            if (dataPointsPerTradingDay > 6) {
+                // High density (hourly data) - very smooth
+                adaptiveTension = 0.05;
+            } else if (dataPointsPerTradingDay > 1) {
+                // Medium density (daily data) - smooth
+                adaptiveTension = 0.1;
+            } else {
+                // Low density (monthly data) - moderately smooth
+                adaptiveTension = 0.2;
             }
         }
         
-        // Validate data before creating chart
-        if (!validDatasets || validDatasets.length === 0) {
-            console.error('No valid datasets to display', {
-                chartData,
-                datasets,
-                currentData
-            });
-            return;
-        }
-        
-        // Use only valid datasets
-        const finalDatasets = validDatasets;
-        
-        console.log('Creating chart with:', {
-            datasetsCount: finalDatasets.length,
-            dataPointsPerDataset: finalDatasets[0]?.data?.length || 0,
-            minIndex: minIndex,
-            maxIndex: maxIndex,
-            datasets: finalDatasets.map(d => ({
+        return {
+            label: `${stock.name} (${stock.symbol})`,
+            data: timeData,
+            borderColor: color,
+            backgroundColor: color,
+            borderWidth: isMobile ? 1.5 : 2,
+            fill: false,
+            tension: adaptiveTension,
+            pointRadius: 0,
+            pointHoverRadius: 0,
+            pointBackgroundColor: color,
+            pointBorderColor: '#ffffff',
+            pointBorderWidth: 0,
+            pointHoverBorderWidth: 0
+        };
+    });
+
+    // Filter out datasets with no data first
+    const validDatasets = datasets.filter(d => d.data && d.data.length > 0);
+    
+    if (validDatasets.length === 0) {
+        console.error('All datasets have no data after filtering', {
+            originalDatasetsCount: datasets.length,
+            datasets: datasets.map(d => ({
                 label: d.label,
-                dataLength: d.data.length,
-                firstPoint: d.data[0],
-                lastPoint: d.data[d.data.length - 1]
+                dataLength: d.data ? d.data.length : 0
             }))
         });
+        return;
+    }
+    
+    // Calculate min and max trading day indices (for linear scale)
+    let minIndex = 0;
+    let maxIndex = 0;
+    
+    if (validDatasets.length > 0 && validDatasets[0].data.length > 0) {
+        // Find min/max indices from all valid datasets
+        const allIndices = [];
+        validDatasets.forEach(dataset => {
+            if (dataset.data && dataset.data.length > 0) {
+                dataset.data.forEach(point => {
+                    if (point.x !== null && point.x !== undefined) {
+                        allIndices.push(point.x);
+                    }
+                });
+            }
+        });
+        
+        if (allIndices.length > 0) {
+            minIndex = Math.min(...allIndices);
+            maxIndex = Math.max(...allIndices);
+        }
+    }
+    
+    // Validate data before creating chart
+    if (!validDatasets || validDatasets.length === 0) {
+        console.error('No valid datasets to display', {
+            chartData,
+            datasets,
+            currentData
+        });
+        return;
+    }
+    
+    // Use only valid datasets
+    const finalDatasets = validDatasets;
+    
+    console.log('Creating chart with:', {
+        datasetsCount: finalDatasets.length,
+        dataPointsPerDataset: finalDatasets[0]?.data?.length || 0,
+        minIndex: minIndex,
+        maxIndex: maxIndex,
+        datasets: finalDatasets.map(d => ({
+            label: d.label,
+            dataLength: d.data.length,
+            firstPoint: d.data[0],
+            lastPoint: d.data[d.data.length - 1]
+        }))
+    });
 
-        performanceChart = new Chart(ctx, {
+    performanceChart = new Chart(ctx, {
             type: 'line',
             data: {
                 datasets: finalDatasets
