@@ -1021,15 +1021,30 @@ function renderChart(chartData, currentData) {
     }
     
     // Ensure we have dates for all data points (only trading days)
-    while (dates.length < maxDataPoints) {
+    while (dates.length < maxDataPoints && dates.length > 0) {
         const lastDate = new Date(dates[dates.length - 1]);
+        if (isNaN(lastDate.getTime())) {
+            console.error('Invalid last date in dates array');
+            break;
+        }
         lastDate.setDate(lastDate.getDate() + 1);
         // Only add if it's a trading day
-        while (!isTradingDay(lastDate) && dates.length < maxDataPoints) {
+        let attempts = 0;
+        const maxAttempts = 365; // Prevent infinite loop
+        while (!isTradingDay(lastDate) && dates.length < maxDataPoints && attempts < maxAttempts) {
             lastDate.setDate(lastDate.getDate() + 1);
+            attempts++;
         }
-        if (dates.length < maxDataPoints) {
-            dates.push(new Date(lastDate));
+        if (dates.length < maxDataPoints && attempts < maxAttempts) {
+            const newDate = new Date(lastDate);
+            if (!isNaN(newDate.getTime())) {
+                dates.push(newDate);
+            } else {
+                console.error('Created invalid date:', lastDate);
+                break;
+            }
+        } else {
+            break; // Prevent infinite loop
         }
     }
     
@@ -1038,16 +1053,50 @@ function renderChart(chartData, currentData) {
         dates.length = maxDataPoints;
     }
     
-    // Debug: log date calculation
-    console.log('Date calculation:', {
-        maxDataPoints,
-        datesCount: dates.length,
-        firstDate: dates[0]?.toISOString(),
-        lastDate: dates[dates.length - 1]?.toISOString(),
-        labels,
-        hasSpecificDays,
-        dates: dates.map(d => d.toISOString().split('T')[0])
+    // Filter out invalid dates
+    const validDates = dates.filter(d => {
+        if (!(d instanceof Date)) return false;
+        const time = d.getTime();
+        return !isNaN(time) && isFinite(time);
     });
+    
+    if (validDates.length === 0) {
+        console.error('No valid dates generated', {
+            maxDataPoints,
+            datesCount: dates.length,
+            labels,
+            hasSpecificDays,
+            dates: dates.map(d => {
+                if (!(d instanceof Date)) return 'NOT_A_DATE';
+                const time = d.getTime();
+                return isNaN(time) ? 'INVALID_DATE' : d.toString();
+            })
+        });
+        return;
+    }
+    
+    // Use valid dates
+    dates.length = 0;
+    dates.push(...validDates);
+    
+    // Debug: log date calculation (only after we know dates are valid)
+    try {
+        console.log('Date calculation:', {
+            maxDataPoints,
+            datesCount: dates.length,
+            firstDate: dates[0] ? dates[0].toISOString() : 'N/A',
+            lastDate: dates[dates.length - 1] ? dates[dates.length - 1].toISOString() : 'N/A',
+            labels,
+            hasSpecificDays,
+            dates: dates.map(d => d.toISOString().split('T')[0])
+        });
+    } catch (error) {
+        console.error('Error logging dates:', error, {
+            datesCount: dates.length,
+            firstDate: dates[0],
+            lastDate: dates[dates.length - 1]
+        });
+    }
     
     // Ensure we have exactly maxDataPoints dates (only trading days)
     if (dates.length !== maxDataPoints) {
