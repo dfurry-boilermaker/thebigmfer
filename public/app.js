@@ -838,11 +838,20 @@ function renderChart(chartData, currentData) {
     }
     
     const ctx = document.getElementById('performanceChart');
-        if (!ctx) return;
+    if (!ctx) {
+        console.error('Chart canvas element not found');
+        return;
+    }
 
-        if (performanceChart) {
-            performanceChart.destroy();
-        }
+    if (performanceChart) {
+        performanceChart.destroy();
+    }
+    
+    // Validate chartData
+    if (!chartData || !chartData.data || !Array.isArray(chartData.data) || chartData.data.length === 0) {
+        console.error('Invalid chartData:', chartData);
+        return;
+    }
 
         // Enhanced colors with better contrast and visibility
         const colors = [
@@ -1211,14 +1220,28 @@ function renderChart(chartData, currentData) {
             };
         });
 
+        // Filter out datasets with no data first
+        const validDatasets = datasets.filter(d => d.data && d.data.length > 0);
+        
+        if (validDatasets.length === 0) {
+            console.error('All datasets have no data after filtering', {
+                originalDatasetsCount: datasets.length,
+                datasets: datasets.map(d => ({
+                    label: d.label,
+                    dataLength: d.data ? d.data.length : 0
+                }))
+            });
+            return;
+        }
+        
         // Calculate min and max trading day indices (for linear scale)
         let minIndex = 0;
         let maxIndex = 0;
         
-        if (datasets.length > 0 && datasets[0].data.length > 0) {
-            // Find min/max indices from all datasets
+        if (validDatasets.length > 0 && validDatasets[0].data.length > 0) {
+            // Find min/max indices from all valid datasets
             const allIndices = [];
-            datasets.forEach(dataset => {
+            validDatasets.forEach(dataset => {
                 if (dataset.data && dataset.data.length > 0) {
                     dataset.data.forEach(point => {
                         if (point.x !== null && point.x !== undefined) {
@@ -1235,27 +1258,35 @@ function renderChart(chartData, currentData) {
         }
         
         // Validate data before creating chart
-        if (!datasets || datasets.length === 0) {
-            console.error('No datasets to display');
+        if (!validDatasets || validDatasets.length === 0) {
+            console.error('No valid datasets to display', {
+                chartData,
+                datasets,
+                currentData
+            });
             return;
         }
         
-        if (datasets.some(d => !d.data || d.data.length === 0)) {
-            console.error('Some datasets have no data');
-            return;
-        }
+        // Use only valid datasets
+        const finalDatasets = validDatasets;
         
         console.log('Creating chart with:', {
-            datasetsCount: datasets.length,
-            dataPointsPerDataset: datasets[0].data.length,
+            datasetsCount: finalDatasets.length,
+            dataPointsPerDataset: finalDatasets[0]?.data?.length || 0,
             minIndex: minIndex,
-            maxIndex: maxIndex
+            maxIndex: maxIndex,
+            datasets: finalDatasets.map(d => ({
+                label: d.label,
+                dataLength: d.data.length,
+                firstPoint: d.data[0],
+                lastPoint: d.data[d.data.length - 1]
+            }))
         });
 
         performanceChart = new Chart(ctx, {
             type: 'line',
             data: {
-                datasets: datasets
+                datasets: finalDatasets
             },
             options: {
                 responsive: true,
