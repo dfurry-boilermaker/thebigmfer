@@ -6,6 +6,40 @@ const indexes = document.getElementById('indexes');
 let performanceChart = null;
 let managerAnalyses = {}; // Cache for manager analyses
 
+// Theme Management
+function initTheme() {
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    updateThemeIcon(savedTheme);
+}
+
+function toggleTheme() {
+    const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('theme', newTheme);
+    updateThemeIcon(newTheme);
+    
+    // Re-render chart with new theme colors if chart exists
+    if (performanceChart && window.lastChartData && window.lastLeaderboardData) {
+        renderChart(window.lastChartData, window.lastLeaderboardData);
+    }
+}
+
+function updateThemeIcon(theme) {
+    // Icon updates are handled by CSS based on data-theme attribute
+    // No JavaScript needed for icon updates
+}
+
+// Initialize theme on page load
+document.addEventListener('DOMContentLoaded', () => {
+    initTheme();
+    const themeToggle = document.getElementById('themeToggle');
+    if (themeToggle) {
+        themeToggle.addEventListener('click', toggleTheme);
+    }
+});
+
 // Mock data for testing (hardcoded managers list)
 const MOCK_MANAGERS = [
     { name: "Daniel", stockSymbol: "NBIS" },
@@ -513,6 +547,9 @@ async function fetchLeaderboardData() {
     managerAnalyses = extractAnalysesFromLeaderboardData(data);
     console.log('Manager analyses extracted:', Object.keys(managerAnalyses).length, 'analyses');
     
+    // Store data for theme switching
+    window.lastLeaderboardData = data;
+    
     // Cache the data
     setCachedData(CACHE_KEYS.leaderboard, CACHE_KEYS.leaderboardTimestamp, data);
     
@@ -727,6 +764,8 @@ async function loadChart() {
             
             if (cachedChartData && cachedCurrentData) {
                 console.log('Using cached chart data');
+                window.lastChartData = cachedChartData;
+                window.lastLeaderboardData = cachedCurrentData;
                 renderChart(cachedChartData, cachedCurrentData);
                 
                 // Fetch fresh data in background (don't wait for it)
@@ -745,6 +784,8 @@ async function loadChart() {
         
         if (cachedChartData && cachedCurrentData) {
             console.log('Using expired cached data due to error');
+            window.lastChartData = cachedChartData;
+            window.lastLeaderboardData = cachedCurrentData;
             renderChart(cachedChartData, cachedCurrentData);
         }
     }
@@ -760,6 +801,8 @@ async function fetchChartData(useMock) {
             sharedMockData = generateMockLeaderboardDataForDate(endDate);
         }
         const chartData = generateMockChartData(sharedMockData);
+        window.lastChartData = chartData;
+        window.lastLeaderboardData = sharedMockData;
         renderChart(chartData, sharedMockData);
         return;
     }
@@ -789,6 +832,10 @@ async function fetchChartData(useMock) {
         setCachedData(CACHE_KEYS.leaderboard, CACHE_KEYS.leaderboardTimestamp, currentData);
     }
     
+    // Store data for theme switching
+    window.lastChartData = chartData;
+    window.lastLeaderboardData = currentData;
+    
     // Render the chart
     renderChart(chartData, currentData);
 }
@@ -817,6 +864,8 @@ async function fetchChartInBackground(useMock) {
                     renderLeaderboard(currentData);
                     
                     // Re-render chart with fresh data
+                    window.lastChartData = chartData;
+                    window.lastLeaderboardData = currentData;
                     renderChart(chartData, currentData);
                     
                     console.log('Background refresh: chart and leaderboard data updated');
@@ -853,8 +902,11 @@ function renderChart(chartData, currentData) {
         return;
     }
 
-    // Enhanced colors with better contrast and visibility
-    const colors = [
+    // Get current theme
+    const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+    
+    // Theme-aware colors
+    const lightColors = [
         '#2563eb',  // Blue
         '#059669',  // Green
         '#dc2626',  // Red
@@ -869,9 +921,26 @@ function renderChart(chartData, currentData) {
         '#ca8a04'   // Yellow
     ];
     
+    const darkColors = [
+        '#60a5fa',  // Soft Blue
+        '#34d399',  // Soft Green
+        '#f472b6',  // Soft Pink
+        '#fbbf24',  // Soft Amber
+        '#a78bfa',  // Soft Purple
+        '#fb7185',  // Soft Rose
+        '#2dd4bf',  // Soft Teal
+        '#fb923c',  // Soft Orange
+        '#84cc16',  // Soft Lime
+        '#c084fc',  // Soft Violet
+        '#38bdf8',  // Soft Sky
+        '#facc15'   // Soft Yellow
+    ];
+    
+    const colors = currentTheme === 'dark' ? darkColors : lightColors;
+    
     // Custom color mapping for specific managers
     const managerColors = {
-        'Greg': '#92400e'  // Brown
+        'Greg': currentTheme === 'dark' ? '#a16207' : '#92400e'  // Bronze
     };
     
     // Detect mobile device
@@ -1382,7 +1451,7 @@ function renderChart(chartData, currentData) {
                         position: 'top',
                         align: 'center',
                         fullSize: true,
-                        color: '#666666',
+                        color: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.8)' : '#666666',
                         font: {
                             size: isMobile ? 10 : 12,
                             weight: '500',
@@ -1415,7 +1484,7 @@ function renderChart(chartData, currentData) {
                                 const sign = value > 0 ? '+' : '';
                                 return sign + value.toFixed(1) + '%';
                             },
-                            color: '#666666',
+                            color: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.6)' : '#666666',
                             font: {
                                 size: isMobile ? 10 : 12,
                                 weight: '500'
@@ -1423,11 +1492,11 @@ function renderChart(chartData, currentData) {
                             padding: isMobile ? 4 : 8
                         },
                         grid: {
-                            color: 'rgba(0, 0, 0, 0.08)',
-                            borderColor: '#d0d0d0',
+                            color: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
+                            borderColor: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.12)' : '#d0d0d0',
                             lineWidth: 1,
                             drawBorder: true,
-                            zeroLineColor: 'rgba(0, 0, 0, 0.2)',
+                            zeroLineColor: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.2)',
                             zeroLineWidth: 2
                         }
                     },
@@ -1442,7 +1511,7 @@ function renderChart(chartData, currentData) {
                         display: true,
                         grid: {
                             display: true,
-                            color: 'rgba(0, 0, 0, 0.05)',
+                            color: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.05)',
                             drawOnChartArea: true
                         },
                         ticks: {
@@ -1450,7 +1519,7 @@ function renderChart(chartData, currentData) {
                             maxTicksLimit: isMobile ? 6 : 8, // Increased for mobile to ensure last date shows
                             autoSkip: true,
                             autoSkipPadding: 10,
-                            color: '#666666',
+                            color: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.6)' : '#666666',
                             font: {
                                 size: isMobile ? 10 : 12,
                                 weight: '500'
