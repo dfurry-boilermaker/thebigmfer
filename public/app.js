@@ -1936,8 +1936,11 @@ function renderChart(chartData, currentData) {
                         const rectHeight = label.textHeight + cfg.rectHeightOffset;
                         const borderRadius = isMobile ? 4 : 6;
                         
-                        // Draw rounded rectangle background
-                        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+                        // Get current theme for label styling
+                        const labelTheme = document.documentElement.getAttribute('data-theme') || 'light';
+                        
+                        // Draw rounded rectangle background - theme-aware
+                        ctx.fillStyle = labelTheme === 'dark' ? '#000000' : 'rgba(255, 255, 255, 0.95)';
                         ctx.beginPath();
                         ctx.roundRect(rectX, rectY, rectWidth, rectHeight, borderRadius);
                         ctx.fill();
@@ -1947,9 +1950,9 @@ function renderChart(chartData, currentData) {
                         ctx.lineWidth = cfg.lineWidth;
                         ctx.stroke();
                         
-                        // Draw label text with better styling
-                        ctx.fillStyle = '#1a1a1a'; // Dark text for better readability
-                        ctx.shadowColor = 'rgba(0, 0, 0, 0.05)';
+                        // Draw label text with better styling - theme-aware
+                        ctx.fillStyle = labelTheme === 'dark' ? '#ffffff' : '#1a1a1a';
+                        ctx.shadowColor = labelTheme === 'dark' ? 'rgba(0, 0, 0, 0.3)' : 'rgba(0, 0, 0, 0.05)';
                         ctx.shadowBlur = 1;
                         ctx.shadowOffsetX = 0;
                         ctx.shadowOffsetY = 0.5;
