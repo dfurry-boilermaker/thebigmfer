@@ -942,30 +942,57 @@ function renderChart(chartData, currentData) {
             }
         } else {
             // We have fewer labels than needed, use labels and fill remaining
-            for (let i = 0; i < labels.length; i++) {
-                const { monthIndex, day } = parseLabel(labels[i]);
-                if (monthIndex !== -1 && day !== null) {
-                    const date = new Date(currentYear, monthIndex, day);
-                    // Only add if it's a trading day
-                    if (isTradingDay(date)) {
-                        dates.push(date);
+            let startDate = firstTradingDay; // Default to first trading day
+            
+            // Try to parse the first label to get a starting date
+            if (labels.length > 0) {
+                const firstLabel = parseLabel(labels[0]);
+                if (firstLabel.monthIndex !== -1 && firstLabel.day !== null) {
+                    const parsedDate = new Date(currentYear, firstLabel.monthIndex, firstLabel.day);
+                    if (!isNaN(parsedDate.getTime()) && isTradingDay(parsedDate)) {
+                        startDate = parsedDate;
                     }
                 }
             }
-            // Fill remaining dates sequentially from last label, but only use trading days up to today
-            if (labels.length > 0) {
-                const lastLabel = parseLabel(labels[labels.length - 1]);
-                if (lastLabel.monthIndex !== -1 && lastLabel.day !== null) {
-                    const today = new Date();
-                    today.setHours(23, 59, 59, 999);
-                    let currentDate = new Date(currentYear, lastLabel.monthIndex, lastLabel.day);
-                    while (dates.length < maxDataPoints && currentDate <= today) {
-                        currentDate.setDate(currentDate.getDate() + 1);
-                        // Only add trading days up to today
-                        if (isTradingDay(currentDate) && currentDate <= today) {
-                            dates.push(new Date(currentDate));
+            
+            // Add dates starting from startDate, only trading days, up to today
+            const today = new Date();
+            today.setHours(23, 59, 59, 999);
+            let currentDate = new Date(startDate);
+            
+            // Make sure we start from a valid trading day
+            while (!isTradingDay(currentDate) && currentDate <= today && dates.length < maxDataPoints) {
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+            
+            // Generate dates up to maxDataPoints or today, whichever comes first
+            let attempts = 0;
+            const maxAttempts = 500; // Prevent infinite loop
+            while (dates.length < maxDataPoints && currentDate <= today && attempts < maxAttempts) {
+                if (isTradingDay(currentDate)) {
+                    const date = new Date(currentDate);
+                    if (!isNaN(date.getTime())) {
+                        dates.push(date);
+                    }
+                }
+                currentDate.setDate(currentDate.getDate() + 1);
+                attempts++;
+            }
+            
+            // If we still don't have enough dates and we've reached today, continue into the future
+            // (but only up to a reasonable limit)
+            if (dates.length < maxDataPoints && attempts < maxAttempts) {
+                const futureLimit = new Date(today);
+                futureLimit.setDate(futureLimit.getDate() + 30); // Allow up to 30 days in future
+                while (dates.length < maxDataPoints && currentDate <= futureLimit && attempts < maxAttempts) {
+                    if (isTradingDay(currentDate)) {
+                        const date = new Date(currentDate);
+                        if (!isNaN(date.getTime())) {
+                            dates.push(date);
                         }
                     }
+                    currentDate.setDate(currentDate.getDate() + 1);
+                    attempts++;
                 }
             }
         }
