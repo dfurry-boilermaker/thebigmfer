@@ -1369,12 +1369,37 @@ function renderChart(chartData, currentData) {
         return;
     }
     
-    // Calculate min and max trading day indices (for linear scale)
+    // First, find the current max trading-day index across all datasets
+    let baseMaxIndex = 0;
+    validDatasets.forEach(dataset => {
+        if (dataset.data && dataset.data.length > 0) {
+            const lastPoint = dataset.data[dataset.data.length - 1];
+            if (lastPoint && lastPoint.x !== null && lastPoint.x !== undefined) {
+                baseMaxIndex = Math.max(baseMaxIndex, lastPoint.x);
+            }
+        }
+    });
+    
+    // Extend every line horizontally to a common point slightly to the right
+    const extensionDays = 5; // extend ~5 trading-day units to the right
+    const extendedMaxIndex = baseMaxIndex + extensionDays;
+    validDatasets.forEach(dataset => {
+        if (dataset.data && dataset.data.length > 0) {
+            const lastPoint = dataset.data[dataset.data.length - 1];
+            if (lastPoint && lastPoint.x < extendedMaxIndex) {
+                dataset.data.push({
+                    x: extendedMaxIndex,
+                    y: lastPoint.y
+                });
+            }
+        }
+    });
+    
+    // Calculate min and max trading day indices (for linear scale), after extension
     let minIndex = 0;
     let maxIndex = 0;
     
     if (validDatasets.length > 0 && validDatasets[0].data.length > 0) {
-        // Find min/max indices from all valid datasets
         const allIndices = [];
         validDatasets.forEach(dataset => {
             if (dataset.data && dataset.data.length > 0) {
@@ -1560,7 +1585,8 @@ function renderChart(chartData, currentData) {
                 },
                 layout: {
                     padding: {
-                        right: isMobile ? 30 : 120,
+                        // Extra right padding so right-aligned labels are fully visible
+                        right: isMobile ? 60 : 200,
                         left: isMobile ? 10 : 20,
                         top: isMobile ? 10 : 20,
                         bottom: isMobile ? 10 : 20
