@@ -1595,8 +1595,8 @@ function renderChart(chartData, currentData) {
                 layout: {
                     padding: {
                         // Right padding so right-aligned labels are visible, but keep it tighter on mobile
-                        right: isMobile ? 40 : 20,
-                        left: isMobile ? 10 : 20,
+                        right: isMobile ? 20 : 20,
+                        left: isMobile ? 0 : 20,
                         top: isMobile ? 10 : 20,
                         bottom: isMobile ? 10 : 20
                     }
