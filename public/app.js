@@ -986,7 +986,17 @@ function renderChart(chartData, currentData) {
     
     // Calculate daily data count
     const baselineCount = 1;
-    const maxDataPoints = Math.max(...chartData.data.map(d => (d.data || []).length));
+    const dataLengths = chartData.data.map(d => (d.data || []).length);
+    const maxDataPoints = dataLengths.length > 0 ? Math.max(...dataLengths) : 0;
+    
+    // Early return if there's no data to render
+    if (maxDataPoints === 0) {
+        console.warn('No data points available for chart rendering', {
+            chartData: chartData,
+            dataLengths: dataLengths
+        });
+        return;
+    }
     
     // Check if labels contain specific days (e.g., "Jan 2") or just months (e.g., "Jan")
     const hasSpecificDays = labels.length > 0 && labels[0].includes(' ');
@@ -2097,7 +2107,7 @@ async function loadIndexes() {
         console.log('Index data received from API:', data);
         
         // If we got empty data or all null values, gracefully fall back to mock data
-        if (!data || data.length === 0 || data.every(d => d.changePercent === null)) {
+        if (!data || data.length === 0 || (Array.isArray(data) && data.every(d => !d || (d.changePercent === null && d.change1d === null)))) {
             console.warn('Index API returned no valid data, using mock data fallback');
             renderIndexes(mockData);
             return;
