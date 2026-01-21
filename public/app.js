@@ -1738,17 +1738,12 @@ function renderChart(chartData, currentData) {
                         ctx.textAlign = 'left';
                         ctx.textBaseline = 'middle';
                         
-                        // Always position label to the right of the point
-                        let finalLabelX = label.x;
-                        
-                        // Check if label would go off the right edge
-                        const labelRightEdge = finalLabelX + label.textWidth + cfg.rectPadding * 2;
-                        const maxX = chartArea.right - 5; // 5px margin from edge
-                        
-                        if (labelRightEdge > maxX) {
-                            // Move label left to fit on screen
-                            finalLabelX = maxX - label.textWidth - cfg.rectPadding * 2;
-                        }
+                        // All labels should share the same right edge inside the chart
+                        const rightMargin = 10; // space from right chart border
+                        const finalRightEdge = chartArea.right - rightMargin;
+                        const rectWidth = label.textWidth + cfg.rectPadding * 2;
+                        const rectX = finalRightEdge - rectWidth;
+                        const finalLabelX = rectX + cfg.rectPadding;
                         
                         ctx.textAlign = 'left';
                         
@@ -1767,13 +1762,8 @@ function renderChart(chartData, currentData) {
                             chartArea: chartArea
                         });
                         
-                        // Draw background rectangle with rounded corners
-                        // Adjust rectX based on text alignment
-                        const rectX = ctx.textAlign === 'right' 
-                            ? finalLabelX - label.textWidth - cfg.rectPadding
-                            : finalLabelX - cfg.rectPadding;
+                        // Draw background rectangle with rounded corners (right-aligned)
                         const rectY = finalLabelY - label.textHeight / 2 - 2;
-                        const rectWidth = label.textWidth + cfg.rectPadding * 2;
                         const rectHeight = label.textHeight + cfg.rectHeightOffset;
                         const borderRadius = isMobile ? 4 : 6;
                         
