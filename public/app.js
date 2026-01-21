@@ -1446,7 +1446,7 @@ function renderChart(chartData, currentData) {
                         fullSize: true,
                         color: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.8)' : '#666666',
                         font: {
-                            size: isMobile ? 10 : 12,
+                            size: isMobile ? 16 : 18,
                             weight: '500',
                             family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", sans-serif'
                         },

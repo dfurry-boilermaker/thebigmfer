@@ -236,8 +236,7 @@ section h2 {
 .chart-section {
     margin-bottom: 0;
     padding: 0 !important;
-    display: flex;
-    justify-content: center; /* Center chart (and its title) within the page */
+    text-align: center;
 }
 
 .chart-container {
@@ -265,7 +264,7 @@ section h2 {
     }
     
     .chart-section {
-        padding: 16px;
+        padding: 0;
         overflow: visible;
     }
     
@@ -281,7 +280,7 @@ section h2 {
     }
     
     .chart-section {
-        padding: 20px;
+        padding: 0;
     }
 }
 
