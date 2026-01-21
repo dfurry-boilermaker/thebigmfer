@@ -1523,7 +1523,7 @@ function renderChart(chartData, currentData) {
                         },
                         ticks: {
                             display: true,
-                            maxTicksLimit: isMobile ? 6 : 8, // Increased for mobile to ensure last date shows
+                            maxTicksLimit: isMobile ? 6 : 8,
                             autoSkip: true,
                             autoSkipPadding: 10,
                             color: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.6)' : '#666666',
@@ -1561,21 +1561,38 @@ function renderChart(chartData, currentData) {
                                 
                                 return label || '';
                             },
-                            // Force the last tick to always be at max index on mobile
-                            stepSize: isMobile ? undefined : undefined, // Let autoSkip handle it
-                            // Custom function to ensure last tick is included
+                            // Custom function to ensure last tick is included on mobile
                             afterBuildTicks: function(scale) {
                                 if (isMobile && scale.ticks && scale.ticks.length > 0) {
                                     // Get the max index
                                     const maxIdx = Math.max(...Array.from(indexToDateLabel.keys()));
                                     const lastTick = scale.ticks[scale.ticks.length - 1];
                                     
-                                    // If the last tick is not at max index, replace it
-                                    if (lastTick && Math.round(lastTick.value) < maxIdx) {
+                                    // Always ensure the last tick is at max index
+                                    if (lastTick) {
+                                        const lastTickValue = Math.round(lastTick.value);
+                                        if (lastTickValue < maxIdx) {
+                                            // Replace the last tick with one at max index
+                                            const lastLabel = indexToDateLabel.get(maxIdx);
+                                            if (lastLabel) {
+                                                lastTick.value = maxIdx;
+                                                lastTick.label = lastLabel;
+                                            }
+                                        } else if (lastTickValue === maxIdx) {
+                                            // Make sure the label is correct
+                                            const lastLabel = indexToDateLabel.get(maxIdx);
+                                            if (lastLabel) {
+                                                lastTick.label = lastLabel;
+                                            }
+                                        }
+                                    } else {
+                                        // If no ticks, add one at max index
                                         const lastLabel = indexToDateLabel.get(maxIdx);
                                         if (lastLabel) {
-                                            lastTick.value = maxIdx;
-                                            lastTick.label = lastLabel;
+                                            scale.ticks.push({
+                                                value: maxIdx,
+                                                label: lastLabel
+                                            });
                                         }
                                     }
                                 }
