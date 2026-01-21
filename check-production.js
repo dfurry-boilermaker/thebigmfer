@@ -50,7 +50,7 @@ async function runChecks() {
     try {
         await checkEndpoint('/health');
         await checkEndpoint('/api/stocks/current');
-        await checkEndpoint('/api/stocks/monthly?mock=true');
+        await checkEndpoint('/api/stocks/monthly');
         
         console.log('\n✅ Checks completed!');
         console.log('\nIf endpoints return 404 or errors, the server may not be running or routes are not configured.');

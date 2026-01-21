@@ -441,47 +441,36 @@ function setCachedData(key, timestampKey, data) {
 
 async function loadLeaderboard() {
     try {
-        const useMock = new URLSearchParams(window.location.search).get('mock') === 'true';
-        
-        // Skip cache for mock data
-        if (!useMock) {
-            // Check cache first
-            const cachedData = getCachedData(CACHE_KEYS.leaderboard, CACHE_KEYS.leaderboardTimestamp);
-            if (cachedData) {
-                console.log('Using cached leaderboard data');
-                // Extract analyses from cached data
-                managerAnalyses = extractAnalysesFromLeaderboardData(cachedData);
-                renderLeaderboard(cachedData);
-                
-                // Fetch fresh data in background (don't wait for it)
-                fetchLeaderboardInBackground();
-                return;
-            }
+        // Check cache first
+        const cachedData = getCachedData(CACHE_KEYS.leaderboard, CACHE_KEYS.leaderboardTimestamp);
+        if (cachedData) {
+            console.log('Using cached leaderboard data');
+            // Extract analyses from cached data
+            managerAnalyses = extractAnalysesFromLeaderboardData(cachedData);
+            renderLeaderboard(cachedData);
+            
+            // Fetch fresh data in background (don't wait for it)
+            fetchLeaderboardInBackground();
+            return;
         }
         
-        // No valid cache, fetch from API (or generate mock data)
+        // No valid cache, fetch from API
         await fetchLeaderboardData();
     } catch (error) {
         console.error('Error loading leaderboard:', error);
-        const useMock = new URLSearchParams(window.location.search).get('mock') === 'true';
         
-        // Try to use cached data even if expired (unless using mock)
-        if (!useMock) {
-            const cachedData = getCachedData(CACHE_KEYS.leaderboard, CACHE_KEYS.leaderboardTimestamp);
-            if (cachedData) {
-                console.log('Using expired cached data due to error');
-                managerAnalyses = extractAnalysesFromLeaderboardData(cachedData);
-                renderLeaderboard(cachedData);
-                return;
-            }
+        // Try to use cached data even if expired
+        const cachedData = getCachedData(CACHE_KEYS.leaderboard, CACHE_KEYS.leaderboardTimestamp);
+        if (cachedData) {
+            console.log('Using expired cached data due to error');
+            managerAnalyses = extractAnalysesFromLeaderboardData(cachedData);
+            renderLeaderboard(cachedData);
+            return;
         }
         
         leaderboard.innerHTML = `<div class="error-message">Failed to load data. Please try again later.</div>`;
     }
 }
-
-// Shared mock data cache to ensure chart and leaderboard use exact same data
-let sharedMockData = null;
 
 // Fetch manager analyses
 // Extract analyses from leaderboard data (analyses are now included in the API response)
@@ -513,23 +502,6 @@ function extractAnalysesFromLeaderboardData(data) {
 }
 
 async function fetchLeaderboardData() {
-    // Use mock data if ?mock=true is in URL
-    const useMock = new URLSearchParams(window.location.search).get('mock') === 'true';
-    
-    if (useMock) {
-        // Generate fake data directly, no API call
-        // Use shared data if available, otherwise generate it
-        if (!sharedMockData) {
-            const chartEndDate = new Date(2026, 5, 15);
-            sharedMockData = generateMockLeaderboardDataForDate(chartEndDate);
-        }
-        console.log('Using mock leaderboard data (no API call)');
-        // Extract analyses from mock data
-        managerAnalyses = extractAnalysesFromLeaderboardData(sharedMockData);
-        renderLeaderboard(sharedMockData);
-        return;
-    }
-    
     const url = `${API_BASE}/stocks/current`;
     console.log('Fetching leaderboard from API:', url);
     const response = await fetch(url);
@@ -560,13 +532,6 @@ async function fetchLeaderboardData() {
 async function fetchLeaderboardInBackground() {
     // Silently fetch fresh data in background
     try {
-        const useMock = new URLSearchParams(window.location.search).get('mock') === 'true';
-        
-        // Don't refresh mock data in background
-        if (useMock) {
-            return;
-        }
-        
         const url = `${API_BASE}/stocks/current`;
         const response = await fetch(url);
         if (response.ok) {
@@ -754,28 +719,23 @@ async function loadChart() {
             return;
         }
 
-        // Use mock data if ?mock=true is in URL
-        const useMock = new URLSearchParams(window.location.search).get('mock') === 'true';
+        // Check cache first
+        const cachedChartData = getCachedData(CACHE_KEYS.chart, CACHE_KEYS.chartTimestamp);
+        const cachedCurrentData = getCachedData(CACHE_KEYS.leaderboard, CACHE_KEYS.leaderboardTimestamp);
         
-        // Check cache first (unless using mock data)
-        if (!useMock) {
-            const cachedChartData = getCachedData(CACHE_KEYS.chart, CACHE_KEYS.chartTimestamp);
-            const cachedCurrentData = getCachedData(CACHE_KEYS.leaderboard, CACHE_KEYS.leaderboardTimestamp);
+        if (cachedChartData && cachedCurrentData) {
+            console.log('Using cached chart data');
+            window.lastChartData = cachedChartData;
+            window.lastLeaderboardData = cachedCurrentData;
+            renderChart(cachedChartData, cachedCurrentData);
             
-            if (cachedChartData && cachedCurrentData) {
-                console.log('Using cached chart data');
-                window.lastChartData = cachedChartData;
-                window.lastLeaderboardData = cachedCurrentData;
-                renderChart(cachedChartData, cachedCurrentData);
-                
-                // Fetch fresh data in background (don't wait for it)
-                fetchChartInBackground(useMock);
-                return;
-            }
+            // Fetch fresh data in background (don't wait for it)
+            fetchChartInBackground();
+            return;
         }
         
         // No valid cache, fetch from API
-        await fetchChartData(useMock);
+        await fetchChartData();
     } catch (error) {
         console.error('Error loading chart:', error);
         // Try to use cached data even if expired
@@ -791,22 +751,7 @@ async function loadChart() {
     }
 }
 
-async function fetchChartData(useMock) {
-    if (useMock) {
-        // Generate fake data directly, no API call
-        console.log('Using mock chart data (no API call)');
-        // Use shared data - generate if not already created
-        if (!sharedMockData) {
-            const endDate = new Date(2026, 5, 15);
-            sharedMockData = generateMockLeaderboardDataForDate(endDate);
-        }
-        const chartData = generateMockChartData(sharedMockData);
-        window.lastChartData = chartData;
-        window.lastLeaderboardData = sharedMockData;
-        renderChart(chartData, sharedMockData);
-        return;
-    }
-    
+async function fetchChartData() {
     const url = `${API_BASE}/stocks/monthly`;
     console.log('Fetching chart data from API:', url);
     
@@ -840,14 +785,9 @@ async function fetchChartData(useMock) {
     renderChart(chartData, currentData);
 }
 
-async function fetchChartInBackground(useMock) {
+async function fetchChartInBackground() {
     // Silently fetch fresh data in background
     try {
-        // Don't refresh mock data in background
-        if (useMock) {
-            return;
-        }
-        
         const url = `${API_BASE}/stocks/monthly`;
         const response = await fetch(url);
         if (response.ok) {
@@ -855,21 +795,19 @@ async function fetchChartInBackground(useMock) {
             const currentResponse = await fetch(`${API_BASE}/stocks/current`);
             if (currentResponse.ok) {
                 const currentData = await currentResponse.json();
-                if (!useMock) {
-                    setCachedData(CACHE_KEYS.chart, CACHE_KEYS.chartTimestamp, chartData);
-                    setCachedData(CACHE_KEYS.leaderboard, CACHE_KEYS.leaderboardTimestamp, currentData);
-                    
-                    // Update leaderboard display with fresh data
-                    managerAnalyses = extractAnalysesFromLeaderboardData(currentData);
-                    renderLeaderboard(currentData);
-                    
-                    // Re-render chart with fresh data
-                    window.lastChartData = chartData;
-                    window.lastLeaderboardData = currentData;
-                    renderChart(chartData, currentData);
-                    
-                    console.log('Background refresh: chart and leaderboard data updated');
-                }
+                setCachedData(CACHE_KEYS.chart, CACHE_KEYS.chartTimestamp, chartData);
+                setCachedData(CACHE_KEYS.leaderboard, CACHE_KEYS.leaderboardTimestamp, currentData);
+                
+                // Update leaderboard display with fresh data
+                managerAnalyses = extractAnalysesFromLeaderboardData(currentData);
+                renderLeaderboard(currentData);
+                
+                // Re-render chart with fresh data
+                window.lastChartData = chartData;
+                window.lastLeaderboardData = currentData;
+                renderChart(chartData, currentData);
+                
+                console.log('Background refresh: chart and leaderboard data updated');
             }
         }
     } catch (error) {
@@ -1101,34 +1039,17 @@ function renderChart(chartData, currentData) {
         
         // Add daily dates for current month (if we have daily data)
         if (dailyDataCount > 0 && labels.length > 0 && lastMonthIndex !== -1 && lastMonthIndex >= 0 && lastMonthIndex < 12) {
-            // Check if this is mock data and adjust accordingly
-            const useMock = new URLSearchParams(window.location.search).get('mock') === 'true';
-            
-            if (useMock && lastMonthName === 'Jul') {
-                // For mock data in July, space the daily points to cover up to July 17
-                const targetLastDay = 17; // Mock data goes up to July 17
-                const step = (targetLastDay - 1) / (dailyDataCount - 1);
-                
-                for (let i = 0; i < dailyDataCount; i++) {
-                    const day = Math.round(1 + (i * step));
-                    const date = new Date(currentYear, lastMonthIndex, Math.min(day, targetLastDay));
-                    if (!isNaN(date.getTime())) {
-                        dates.push(date);
-                    }
-                }
-            } else {
-                // For real data, start from the first trading day of the month
-                // Jan 1, 2026 is a holiday, so first trading day is Jan 2
-                const firstTradingDay = (lastMonthIndex === 0 && currentYear === 2026) ? 2 : 1;
-                for (let i = 0; i < dailyDataCount; i++) {
-                    const day = firstTradingDay + i;
-                    // Ensure day is valid (not exceeding month length)
-                    const date = new Date(currentYear, lastMonthIndex, day);
-                    if (!isNaN(date.getTime())) {
-                        dates.push(date);
-                    } else {
-                        console.warn(`Invalid date created: ${currentYear}-${lastMonthIndex + 1}-${day}`);
-                    }
+            // Start from the first trading day of the month
+            // Jan 1, 2026 is a holiday, so first trading day is Jan 2
+            const firstTradingDay = (lastMonthIndex === 0 && currentYear === 2026) ? 2 : 1;
+            for (let i = 0; i < dailyDataCount; i++) {
+                const day = firstTradingDay + i;
+                // Ensure day is valid (not exceeding month length)
+                const date = new Date(currentYear, lastMonthIndex, day);
+                if (!isNaN(date.getTime())) {
+                    dates.push(date);
+                } else {
+                    console.warn(`Invalid date created: ${currentYear}-${lastMonthIndex + 1}-${day}`);
                 }
             }
         }
@@ -2053,51 +1974,12 @@ setInterval(() => {
 // Load Indexes
 async function loadIndexes() {
     try {
-        const useMock = new URLSearchParams(window.location.search).get('mock') === 'true';
-        
-        // Generate mock index data for testing or fallback
-        const mockData = [
-            {
-                symbol: 'SPY',
-                name: 'S&P 500',
-                currentPrice: 485.23,
-                changePercent: 12.45,
-                change1d: 0.23
-            },
-            {
-                symbol: 'QQQ',
-                name: 'Nasdaq 100',
-                currentPrice: 432.18,
-                changePercent: 15.67,
-                change1d: 0.45
-            },
-            {
-                symbol: 'DIA',
-                name: 'Dow Jones',
-                currentPrice: 385.42,
-                changePercent: 10.23,
-                change1d: 0.18
-            },
-            {
-                symbol: 'DX-Y.NYB',
-                name: 'US Dollar',
-                currentPrice: 104.32,
-                changePercent: -2.15,
-                change1d: -0.12
-            }
-        ];
-        
-        if (useMock) {
-            renderIndexes(mockData);
-            return;
-        }
-        
         const url = `${API_BASE}/indexes`;
         const response = await fetch(url);
         
         if (!response.ok) {
-            console.warn('Index API failed, using mock data');
-            renderIndexes(mockData);
+            console.error('Index API failed:', response.status);
+            indexes.innerHTML = `<div class="error-message">Failed to load index data. Please try again later.</div>`;
             return;
         }
         
@@ -2106,17 +1988,17 @@ async function loadIndexes() {
         // Log the data we received for debugging
         console.log('Index data received from API:', data);
         
-        // If we got empty data or all null values, gracefully fall back to mock data
+        // If we got empty data or all null values, show error
         if (!data || data.length === 0 || (Array.isArray(data) && data.every(d => !d || (d.changePercent === null && d.change1d === null)))) {
-            console.warn('Index API returned no valid data, using mock data fallback');
-            renderIndexes(mockData);
+            console.error('Index API returned no valid data');
+            indexes.innerHTML = `<div class="error-message">Failed to load index data. Please try again later.</div>`;
             return;
         }
         
         renderIndexes(data);
     } catch (error) {
         console.error('Error loading indexes:', error);
-        // Show error instead of mock data
+        // Show error instead of fallback data
         indexes.innerHTML = `<div class="error-message">Failed to load index data: ${error.message}</div>`;
     }
 }

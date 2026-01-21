@@ -9,8 +9,7 @@ const {
     setCachedStockData, 
     getLastUpdate,
     CACHE_KEYS,
-    isMarketOpen, 
-    generateMockCurrentData 
+    isMarketOpen 
 } = require('../utils');
 
 module.exports = async (req, res) => {
@@ -25,13 +24,6 @@ module.exports = async (req, res) => {
     
     if (req.method !== 'GET') {
         return res.status(405).json({ error: 'Method not allowed' });
-    }
-    
-    // Check if using mock data
-    const useMock = req.query.mock === 'true';
-    if (useMock) {
-        const mockData = generateMockCurrentData();
-        return res.status(200).json(mockData);
     }
     
     // Check if we should use cached data (market is closed or rate limited)

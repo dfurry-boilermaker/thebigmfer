@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const YahooFinance = require('yahoo-finance2').default;
 const yahooFinance = new YahooFinance();
-const { generateMockCurrentData, getYTDDividends, getBaselinePrices } = require('./api/utils');
+const { getYTDDividends, getBaselinePrices } = require('./api/utils');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -84,76 +84,10 @@ async function getIntradayData(symbol, startDate, endDate, interval = '1h') {
     }
 }
 
-// Generate mock chart data
-function generateMockChartData() {
-    const managers = loadManagersFromConfig();
-    const currentDate = new Date();
-    const currentYear = 2026;
-    const currentMonth = currentDate.getMonth(); // 0-11
-    const currentDay = currentDate.getDate();
-    
-    // Mock data goes up to July 17, 2026
-    const mockEndMonth = 6; // July (0-indexed)
-    const mockEndDay = 17;
-    
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const monthLabels = [];
-    for (let i = 0; i <= mockEndMonth; i++) {
-        monthLabels.push(months[i]);
-    }
-    
-    // Generate mock performance data for each stock
-    const stockData = managers.map((manager, index) => {
-        const symbol = manager.stockSymbol;
-        const data = [0]; // Start at 0% (baseline)
-        
-        // Generate month-end values for Jan-Jun
-        const monthEndValues = [
-            19.6,   // Jan
-            20.91,  // Feb
-            19.28,  // Mar
-            20.83,  // Apr
-            23.25,  // May
-            20.71   // Jun
-        ];
-        
-        // Add some variation based on stock index
-        const variation = (index % 3 - 1) * 2; // -2, 0, or 2
-        
-        for (let i = 0; i < monthEndValues.length; i++) {
-            data.push(monthEndValues[i] + variation);
-        }
-        
-        // Generate daily data for July (up to July 17)
-        const julyDaily = [21.24, 21.17, 21.53, 22.11, 22.78, 22.43, 22.22, 22.36, 21.93, 22.59, 22.16, 21.7];
-        for (let i = 0; i < julyDaily.length; i++) {
-            data.push(julyDaily[i] + variation);
-        }
-        
-        return {
-            name: manager.name,
-            symbol: symbol,
-            data: data
-        };
-    });
-    
-    return {
-        months: monthLabels,
-        data: stockData
-    };
-}
-
 // API Routes
 
 // Get current stock prices and performance
 app.get('/api/stocks/current', async (req, res) => {
-    // Check if using mock data
-    const useMock = req.query.mock === 'true';
-    if (useMock) {
-        const mockData = generateMockCurrentData();
-        return res.status(200).json(mockData);
-    }
-    
     try {
         const managers = loadManagersFromConfig();
         const symbols = managers.map(m => m.stockSymbol);
@@ -272,14 +206,6 @@ app.get('/api/stocks/current', async (req, res) => {
 // Get monthly/daily stock performance data
 app.get('/api/stocks/monthly', async (req, res) => {
     try {
-        const useMock = req.query.mock === 'true';
-        
-        if (useMock) {
-            const { generateMockChartData } = require('./api/utils');
-            const mockData = generateMockChartData();
-            return res.json(mockData);
-        }
-        
         const managers = loadManagersFromConfig();
         const symbols = managers.map(m => m.stockSymbol);
         
@@ -653,13 +579,7 @@ app.get('/api/indexes', async (req, res) => {
     } catch (error) {
         console.error('Error fetching indexes:', error);
         console.error(error.stack);
-        // Return empty results instead of error to allow frontend to show mock data
-        res.json([
-            { symbol: 'SPY', name: 'S&P 500', currentPrice: null, changePercent: null, change1d: null },
-            { symbol: 'QQQ', name: 'Nasdaq 100', currentPrice: null, changePercent: null, change1d: null },
-            { symbol: 'DIA', name: 'Dow Jones', currentPrice: null, changePercent: null, change1d: null },
-            { symbol: 'DX-Y.NYB', name: 'US Dollar', currentPrice: null, changePercent: null, change1d: null }
-        ]);
+        res.status(500).json({ error: 'Failed to fetch index data' });
     }
 });
 

@@ -4,7 +4,6 @@ const {
     loadManagersFromConfig, 
     getBaselinePrices, 
     getIntradayData, 
-    generateMockChartData, 
     shouldUseCache, 
     getCachedStockData, 
     setCachedStockData, 
@@ -29,13 +28,6 @@ module.exports = async (req, res) => {
     }
     
     try {
-        const useMock = req.query.mock === 'true';
-        
-        if (useMock) {
-            const mockData = generateMockChartData();
-            return res.status(200).json(mockData);
-        }
-        
         // Check if we should use cached data (market is closed)
         const useCache = await shouldUseCache();
         if (useCache) {

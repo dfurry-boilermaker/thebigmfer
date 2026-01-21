@@ -60,9 +60,6 @@ async function runTests() {
         // Test monthly stocks endpoint
         await testEndpoint('/api/stocks/monthly', 'Monthly Stocks');
         
-        // Test monthly stocks with mock
-        await testEndpoint('/api/stocks/monthly?mock=true', 'Monthly Stocks (Mock)');
-        
         console.log('\n✅ All tests completed!');
     } catch (error) {
         console.error('\n❌ Test failed:', error.message);
