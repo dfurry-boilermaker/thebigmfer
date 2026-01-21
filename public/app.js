@@ -1523,9 +1523,9 @@ function renderChart(chartData, currentData) {
                         },
                         ticks: {
                             display: true,
-                            maxTicksLimit: isMobile ? 6 : 8,
+                            maxTicksLimit: isMobile ? 5 : 8, // Reduced for mobile to ensure last tick fits
                             autoSkip: true,
-                            autoSkipPadding: 10,
+                            autoSkipPadding: isMobile ? 5 : 10, // Reduced padding on mobile
                             color: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.6)' : '#666666',
                             font: {
                                 size: isMobile ? 10 : 12,
@@ -1594,6 +1594,11 @@ function renderChart(chartData, currentData) {
                                                 label: lastLabel
                                             });
                                         }
+                                    }
+                                    
+                                    // Force the last tick to be visible by ensuring it's within the scale range
+                                    if (lastTick && lastTick.value > scale.max) {
+                                        scale.max = lastTick.value + 0.5;
                                     }
                                 }
                             }
