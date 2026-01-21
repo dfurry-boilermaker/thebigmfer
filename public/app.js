@@ -1380,6 +1380,9 @@ function renderChart(chartData, currentData) {
         }
     });
     
+    // Store the actual max index before extension (for x-axis tick generation)
+    const actualMaxIndex = baseMaxIndex;
+    
     // Extend every line horizontally to a common point slightly to the right
     const extensionDays = 5; // extend ~5 trading-day units to the right
     const extendedMaxIndex = baseMaxIndex + extensionDays;
@@ -1395,27 +1398,10 @@ function renderChart(chartData, currentData) {
         }
     });
     
-    // Calculate min and max trading day indices (for linear scale), after extension
+    // Calculate min and max trading day indices (for linear scale)
+    // Use actualMaxIndex for x-axis to prevent duplicate labels, but extendedMaxIndex for line rendering
     let minIndex = 0;
-    let maxIndex = 0;
-    
-    if (validDatasets.length > 0 && validDatasets[0].data.length > 0) {
-        const allIndices = [];
-        validDatasets.forEach(dataset => {
-            if (dataset.data && dataset.data.length > 0) {
-                dataset.data.forEach(point => {
-                    if (point.x !== null && point.x !== undefined) {
-                        allIndices.push(point.x);
-                    }
-                });
-            }
-        });
-        
-        if (allIndices.length > 0) {
-            minIndex = Math.min(...allIndices);
-            maxIndex = Math.max(...allIndices);
-        }
-    }
+    let maxIndex = actualMaxIndex; // Use actual data max, not extended max, for x-axis
     
     // Validate data before creating chart
     if (!validDatasets || validDatasets.length === 0) {
@@ -1523,9 +1509,9 @@ function renderChart(chartData, currentData) {
                         },
                         ticks: {
                             display: true,
-                            maxTicksLimit: isMobile ? 5 : 8, // Reduced for mobile to ensure last tick fits
+                            maxTicksLimit: isMobile ? 5 : 8,
                             autoSkip: true,
-                            autoSkipPadding: isMobile ? 5 : 10, // Reduced padding on mobile
+                            autoSkipPadding: isMobile ? 5 : 10,
                             color: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.6)' : '#666666',
                             font: {
                                 size: isMobile ? 10 : 12,
@@ -1542,7 +1528,7 @@ function renderChart(chartData, currentData) {
                                 const tradingDayIndex = Math.round(value);
                                 let label = indexToDateLabel.get(tradingDayIndex);
                                 
-                                // On mobile, always show the last tick (current date) even if it's not in the normal tick sequence
+                                // On mobile only, always show the last tick (current date) even if it's not in the normal tick sequence
                                 if (isMobile && index === ticks.length - 1) {
                                     // Find the last available label (max index) to ensure current date is shown
                                     let maxIdx = -1;
@@ -1561,8 +1547,9 @@ function renderChart(chartData, currentData) {
                                 
                                 return label || '';
                             },
-                            // Custom function to ensure last tick is included on mobile
+                            // Custom function to ensure last tick is included on mobile only
                             afterBuildTicks: function(scale) {
+                                // Only apply mobile-specific fixes on mobile
                                 if (isMobile && scale.ticks && scale.ticks.length > 0) {
                                     // Get the max index
                                     const maxIdx = Math.max(...Array.from(indexToDateLabel.keys()));
