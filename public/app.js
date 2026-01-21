@@ -1694,182 +1694,31 @@ function renderChart(chartData, currentData) {
                     
                     console.log(`Collected ${labelData.length} labels`);
                     
-                    // Sort labels by YTD percentage value (highest to lowest, top to bottom)
-                    // This ensures labels are ordered correctly by their actual performance
-                    labelData.sort((a, b) => b.ytdValue - a.ytdValue);
-                    const minSpacing = cfg.minSpacing;
-                    const topBound = chartArea.top + cfg.labelTopMargin;
-                    const bottomBound = chartArea.bottom - cfg.labelBottomMargin;
-                    
-                    // Enhanced collision detection - resolve all overlaps with more aggressive spacing
-                    let hasOverlaps = true;
-                    let iterations = 0;
-                    const maxIterations = 100; // Increased for better resolution
-                    
-                    while (hasOverlaps && iterations < maxIterations) {
-                        iterations++;
-                        hasOverlaps = false;
-                        
-                        // Sort by Y position for ordered processing
-                        labelData.sort((a, b) => a.y - b.y);
-                        
-                        // Check all pairs of labels for overlaps
-                        for (let i = 0; i < labelData.length; i++) {
-                            const current = labelData[i];
-                            const currentTop = current.y - current.textHeight / 2;
-                            const currentBottom = current.y + current.textHeight / 2;
-                            
-                            for (let j = i + 1; j < labelData.length; j++) {
-                                const other = labelData[j];
-                                const otherTop = other.y - other.textHeight / 2;
-                                const otherBottom = other.y + other.textHeight / 2;
-                                
-                                // Check if labels overlap - calculate gap between them
-                                // If current is above other, gap = otherTop - currentBottom
-                                // If other is above current, gap = currentTop - otherBottom
-                                const gap = current.y < other.y 
-                                    ? (otherTop - currentBottom) 
-                                    : (currentTop - otherBottom);
-                                
-                                // Only adjust if labels are overlapping or touching (gap < minSpacing)
-                                if (gap < minSpacing) {
-                                    hasOverlaps = true;
-                                    
-                                    // Calculate required separation - just enough to prevent overlap
-                                    const totalNeeded = minSpacing - gap;
-                                    
-                                    // Determine movement direction based on YTD values (higher YTD should be above)
-                                    const currentIsAbove = current.ytdValue > other.ytdValue;
-                                    
-                                    if (currentIsAbove) {
-                                        // Current should be above, move it up or other down
-                                        if (current.y - totalNeeded - current.textHeight / 2 >= topBound) {
-                                            current.y -= totalNeeded;
-                                        } else if (other.y + totalNeeded + other.textHeight / 2 <= bottomBound) {
-                                            other.y += totalNeeded;
-                                        } else {
-                                            // Split the difference
-                                            const moveAmount = totalNeeded / 2;
-                                            current.y = Math.max(topBound + current.textHeight / 2, current.y - moveAmount);
-                                            other.y = Math.min(bottomBound - other.textHeight / 2, other.y + moveAmount);
-                                        }
-                                    } else {
-                                        // Other should be above, move it up or current down
-                                        if (other.y - totalNeeded - other.textHeight / 2 >= topBound) {
-                                            other.y -= totalNeeded;
-                                        } else if (current.y + totalNeeded + current.textHeight / 2 <= bottomBound) {
-                                            current.y += totalNeeded;
-                                        } else {
-                                            // Split the difference
-                                            const moveAmount = totalNeeded / 2;
-                                            other.y = Math.max(topBound + other.textHeight / 2, other.y - moveAmount);
-                                            current.y = Math.min(bottomBound - current.textHeight / 2, current.y + moveAmount);
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            // Ensure label is within bounds after adjustments
-                            if (current.y - current.textHeight / 2 < topBound) {
-                                current.y = topBound + current.textHeight / 2;
-                            }
-                            if (current.y + current.textHeight / 2 > bottomBound) {
-                                current.y = bottomBound - current.textHeight / 2;
-                            }
-                        }
-                    }
-                    
-                    // Final pass: ensure no overlaps and maintain correct order by YTD value
-                    // Sort by YTD value (highest to lowest) to maintain performance order
+                    // Sort labels by YTD percentage (highest to lowest)
                     labelData.sort((a, b) => b.ytdValue - a.ytdValue);
                     
-                    // Multiple passes to ensure all overlaps are resolved
-                    for (let pass = 0; pass < 5; pass++) {
-                        for (let i = 1; i < labelData.length; i++) {
-                            const current = labelData[i];
-                            const previous = labelData[i - 1];
-                            
-                            // Previous should be above current (higher YTD = higher on chart)
-                            const currentTop = current.y - current.textHeight / 2;
-                            const previousBottom = previous.y + previous.textHeight / 2;
-                            const gap = currentTop - previousBottom;
-                            
-                            // If overlapping or too close, separate them
-                            if (gap < minSpacing) {
-                                const needed = minSpacing - gap;
-                                
-                                // Try to move current down (lower YTD goes down)
-                                if (current.y + needed + current.textHeight / 2 <= bottomBound) {
-                                    current.y += needed;
-                                } else if (previous.y - needed - previous.textHeight / 2 >= topBound) {
-                                    // Move previous up (higher YTD goes up)
-                                    previous.y -= needed;
-                                } else {
-                                    // Split the difference if both are constrained
-                                    const moveAmount = needed / 2;
-                                    current.y = Math.min(bottomBound - current.textHeight / 2, current.y + moveAmount);
-                                    previous.y = Math.max(topBound + previous.textHeight / 2, previous.y - moveAmount);
-                                }
-                            }
-                            
-                            // Ensure previous is always above current (maintain YTD order)
-                            if (previous.ytdValue > current.ytdValue && previous.y >= current.y) {
-                                // Previous should be above, ensure proper spacing
-                                const requiredY = previous.y + previous.textHeight / 2 + minSpacing + current.textHeight / 2;
-                                if (requiredY <= bottomBound) {
-                                    current.y = requiredY;
-                                } else {
-                                    // Can't fit below, move previous up
-                                    const newPreviousY = current.y - current.textHeight / 2 - minSpacing - previous.textHeight / 2;
-                                    if (newPreviousY >= topBound) {
-                                        previous.y = newPreviousY;
-                                    } else {
-                                        // Both constrained, split the difference
-                                        const midY = (topBound + bottomBound) / 2;
-                                        previous.y = midY - (previous.textHeight + minSpacing) / 2;
-                                        current.y = midY + (current.textHeight + minSpacing) / 2;
-                                    }
-                                }
-                            }
-                            
-                            // Clamp both to bounds after each adjustment
-                            previous.y = Math.max(topBound + previous.textHeight / 2, Math.min(bottomBound - previous.textHeight / 2, previous.y));
-                            current.y = Math.max(topBound + current.textHeight / 2, Math.min(bottomBound - current.textHeight / 2, current.y));
-                        }
-                    }
+                    // Lay out labels in a clean, evenly spaced vertical column on the right
+                    const topBound = chartArea.top + cfg.labelTopMargin + cfg.textHeight / 2;
+                    const bottomBound = chartArea.bottom - cfg.labelBottomMargin - cfg.textHeight / 2;
+                    const availableHeight = Math.max(bottomBound - topBound, cfg.textHeight);
+                    const count = labelData.length || 1;
+                    const baseSpacing = availableHeight / Math.max(count - 1, 1);
                     
-                    // Final verification pass: check all pairs one more time to ensure no overlaps
-                    labelData.sort((a, b) => a.y - b.y);
-                    for (let i = 0; i < labelData.length; i++) {
-                        for (let j = i + 1; j < labelData.length; j++) {
-                            const label1 = labelData[i];
-                            const label2 = labelData[j];
-                            
-                            const label1Top = label1.y - label1.textHeight / 2;
-                            const label1Bottom = label1.y + label1.textHeight / 2;
-                            const label2Top = label2.y - label2.textHeight / 2;
-                            const label2Bottom = label2.y + label2.textHeight / 2;
-                            
-                            // Calculate gap
-                            const gap = label1.y < label2.y 
-                                ? (label2Top - label1Bottom) 
-                                : (label1Top - label2Bottom);
-                            
-                            // If still overlapping, force separation
-                            if (gap < minSpacing) {
-                                const needed = minSpacing - gap;
-                                if (label1.y < label2.y) {
-                                    // label1 is above, move label2 down
-                                    label2.y += needed;
-                                    label2.y = Math.min(bottomBound - label2.textHeight / 2, label2.y);
-                                } else {
-                                    // label2 is above, move label1 down
-                                    label1.y += needed;
-                                    label1.y = Math.min(bottomBound - label1.textHeight / 2, label1.y);
-                                }
-                            }
+                    labelData.forEach((label, index) => {
+                        // Even vertical spacing from top to bottom
+                        let targetY;
+                        if (count === 1) {
+                            targetY = (topBound + bottomBound) / 2;
+                        } else {
+                            targetY = topBound + index * baseSpacing;
                         }
-                    }
+                        label.y = targetY;
+                        
+                        // Position horizontally as a right-side column just inside the chart
+                        const labelRightMargin = 10;
+                        const maxX = chartArea.right - labelRightMargin;
+                        label.x = maxX - label.textWidth - cfg.rectPadding * 2;
+                    });
                     
                     let drawnCount = 0;
                     labelData.forEach((label) => {
