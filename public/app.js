@@ -1989,15 +1989,15 @@ function isMarketOpen() {
     return time >= marketOpen && time < marketClose;
 }
 
-// Auto-refresh every 15 minutes to avoid rate limits
+// Auto-refresh every 30 minutes to avoid rate limits
 setInterval(() => {
     if (isMarketOpen()) {
-        // Market hours: refresh every 15 minutes
+        // Market hours: refresh every 30 minutes
         loadLeaderboard();
         loadIndexes();
         loadChart();
     }
-}, 900000); // 15 minutes (900,000 milliseconds)
+}, 1800000); // 30 minutes (1,800,000 milliseconds)
 
 // Load Indexes
 async function loadIndexes() {

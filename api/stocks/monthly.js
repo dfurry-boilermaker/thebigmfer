@@ -81,66 +81,32 @@ module.exports = async (req, res) => {
                 // First trading day of 2026 is Jan 2, 2026
                 const firstTradingDay = new Date(2026, 0, 2); // Jan 2, 2026
                 
-                // Only fetch hourly data from Jan 2, 2026 to today
+                // Only fetch **daily** data from Jan 2, 2026 to today
                 const data = [];
                 const timestamps = [];
                 
-                try {
-                    const intradayData = await getIntradayData(symbol, firstTradingDay, todayEnd, '1h');
+                // Use daily historical data (1d interval) to minimize API load
+                const history = await yahooFinance.historical(symbol, {
+                    period1: Math.floor(firstTradingDay.getTime() / 1000),
+                    period2: Math.floor(todayEnd.getTime() / 1000),
+                    interval: '1d'
+                });
+                
+                if (history && history.length > 0) {
+                    // Sort daily data by date
+                    history.sort((a, b) => a.date.getTime() - b.date.getTime());
                     
-                    if (intradayData && intradayData.length > 0) {
-                        // Sort intraday data by date
-                        intradayData.sort((a, b) => a.date.getTime() - b.date.getTime());
+                    history.forEach(entry => {
+                        const entryDate = entry.date instanceof Date ? entry.date : new Date(entry.date);
+                        const entryTimestamp = entryDate.getTime();
                         
-                        intradayData.forEach(entry => {
-                            const entryDate = entry.date;
-                            const entryTimestamp = entryDate.getTime();
-                            
-                            // Only include data from Jan 2, 2026 onwards and on trading days
-                            if (entryTimestamp >= firstTradingDay.getTime() && isTradingDay(entryDate)) {
-                                // Calculate start of hour timestamp (for open price)
-                                const hourStart = new Date(entryDate);
-                                hourStart.setMinutes(0);
-                                hourStart.setSeconds(0);
-                                hourStart.setMilliseconds(0);
-                                const hourStartTimestamp = hourStart.getTime();
-                                
-                                // Add open price at the start of the hour (if available)
-                                if (entry.open !== null && entry.open !== undefined && hourStartTimestamp >= firstTradingDay.getTime()) {
-                                    const openPercentChange = ((entry.open - baselinePrice) / baselinePrice) * 100;
-                                    data.push(openPercentChange);
-                                    timestamps.push(hourStartTimestamp);
-                                }
-                                
-                                // Add close price at the end of the hour
-                                const closePercentChange = ((entry.close - baselinePrice) / baselinePrice) * 100;
-                                data.push(closePercentChange);
-                                timestamps.push(entryTimestamp);
-                            }
-                        });
-                        
-                        // Sort data and timestamps by timestamp to ensure chronological order
-                        const dataWithTimestamps = [];
-                        for (let i = 0; i < data.length; i++) {
-                            if (timestamps[i]) {
-                                dataWithTimestamps.push({
-                                    timestamp: timestamps[i],
-                                    value: data[i]
-                                });
-                            }
+                        // Only include data from Jan 2, 2026 onwards and on trading days
+                        if (entryTimestamp >= firstTradingDay.getTime() && isTradingDay(entryDate) && entry.close !== null && entry.close !== undefined) {
+                            const percentChange = ((entry.close - baselinePrice) / baselinePrice) * 100;
+                            data.push(percentChange);
+                            timestamps.push(entryTimestamp);
                         }
-                        dataWithTimestamps.sort((a, b) => a.timestamp - b.timestamp);
-                        
-                        // Update data and timestamps arrays with sorted values
-                        data.length = 0;
-                        timestamps.length = 0;
-                        dataWithTimestamps.forEach(item => {
-                            data.push(item.value);
-                            timestamps.push(item.timestamp);
-                        });
-                    }
-                } catch (intradayError) {
-                    // Hourly data not available, will use daily data
+                    });
                 }
                 
                 return {
@@ -181,9 +147,9 @@ module.exports = async (req, res) => {
         
         // Cache the results (always cache, with appropriate TTL)
         // Calculate TTL based on market hours
-        // During market hours: 15 minutes (900 seconds)
+        // During market hours: 30 minutes (1800 seconds)
         // After market hours: 24 hours (86400 seconds)
-        const ttlSeconds = isMarketOpen() ? 900 : 86400;
+        const ttlSeconds = isMarketOpen() ? 1800 : 86400;
         await setCachedStockData(CACHE_KEYS.MONTHLY, responseData, ttlSeconds);
         
         res.status(200).json(responseData);

@@ -219,9 +219,9 @@ async function shouldUseCache() {
     
     const cacheAge = Date.now() - lastUpdate;
     
-    // During market hours: use cache if less than 15 minutes old (matches refresh interval)
+    // During market hours: use cache if less than 30 minutes old (matches refresh interval)
     if (isMarketOpen()) {
-        const maxCacheAgeMarketHours = 15 * 60 * 1000; // 15 minutes
+        const maxCacheAgeMarketHours = 30 * 60 * 1000; // 30 minutes
         if (cacheAge < maxCacheAgeMarketHours) {
             return true;
         }
@@ -241,9 +241,9 @@ function shouldUseCacheSync() {
     if (stockDataCache.current && stockDataCache.lastUpdate) {
         const cacheAge = Date.now() - stockDataCache.lastUpdate;
         
-        // During market hours: use cache if less than 15 minutes old
+        // During market hours: use cache if less than 30 minutes old
         if (isMarketOpen()) {
-            const maxCacheAgeMarketHours = 15 * 60 * 1000; // 15 minutes
+            const maxCacheAgeMarketHours = 30 * 60 * 1000; // 30 minutes
             if (cacheAge < maxCacheAgeMarketHours) {
                 return true;
             }

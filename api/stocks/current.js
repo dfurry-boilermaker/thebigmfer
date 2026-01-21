@@ -199,9 +199,9 @@ module.exports = async (req, res) => {
         // Cache the results if we got valid data (even during market hours)
         if (validResults.length > 0 && validResults.some(r => r.changePercent !== null && r.currentPrice > 0)) {
             // Calculate TTL based on market hours
-            // During market hours: 15 minutes (900 seconds)
+            // During market hours: 30 minutes (1800 seconds)
             // After market hours: 24 hours (86400 seconds)
-            const ttlSeconds = isMarketOpen() ? 900 : 86400;
+            const ttlSeconds = isMarketOpen() ? 1800 : 86400;
             await setCachedStockData(CACHE_KEYS.CURRENT, validResults, ttlSeconds);
         }
         
