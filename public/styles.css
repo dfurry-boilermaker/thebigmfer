@@ -236,6 +236,8 @@ section h2 {
 .chart-section {
     margin-bottom: 0;
     padding: 0 !important;
+    display: flex;
+    justify-content: center; /* Center chart (and its title) within the page */
 }
 
 .chart-container {
