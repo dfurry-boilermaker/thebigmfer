@@ -1621,7 +1621,6 @@ function renderChart(chartData, currentData) {
                             textHeight: 9,
                             labelOffsetX: 4,
                             padding: 35,
-                            minSpacing: 3,
                             topMargin: 5,
                             bottomMargin: 5,
                             topBound: 20,
@@ -1637,7 +1636,6 @@ function renderChart(chartData, currentData) {
                             textHeight: 18,
                             labelOffsetX: 14,
                             padding: 20,
-                            minSpacing: 3,
                             topMargin: 10,
                             bottomMargin: 10,
                             topBound: 20,
@@ -1724,7 +1722,8 @@ function renderChart(chartData, currentData) {
                     // with only minimal adjustment to avoid overlaps and keep them on-screen.
                     const topBound = chartArea.top + cfg.labelTopMargin + cfg.textHeight / 2;
                     const bottomBound = chartArea.bottom - cfg.labelBottomMargin - cfg.textHeight / 2;
-                    const minSpacing = cfg.minSpacing;
+                    // Minimum vertical spacing between label centers so boxes don't overlap
+                    const minSpacing = (cfg.textHeight || 12) + (isMobile ? 4 : 8);
                     
                     // Sort by the original Y position so we adjust from top to bottom
                     labelData.sort((a, b) => a.y - b.y);
