@@ -55,21 +55,11 @@ module.exports = async (req, res) => {
         // If rate limited and we have cache, use it
         if (isRateLimited) {
             const cachedData = await getCachedStockData(CACHE_KEYS.CURRENT);
-            if (cachedData) {
+            if (cachedData && Array.isArray(cachedData) && cachedData.length > 0 && cachedData.some(r => r.changePercent !== null)) {
                 return res.status(200).json(cachedData);
             } else {
-                // Return empty data structure so frontend doesn't break
-                const managers = loadManagersFromConfig();
-                return res.status(200).json(managers.map(m => ({
-                    name: m.name,
-                    symbol: m.stockSymbol,
-                    currentPrice: 0,
-                    changePercent: null,
-                    change1d: null,
-                    change1m: null,
-                    change3m: null,
-                    analysis: m.analysis || null
-                })));
+                // Return 503 Service Unavailable if we can't get data and have no valid cache
+                return res.status(503).json({ error: 'Service temporarily unavailable. Please try again later.' });
             }
         }
         
@@ -108,7 +98,7 @@ module.exports = async (req, res) => {
                 // If we got no quotes due to rate limiting, use cache
                 if (quotes.length === 0) {
                     const cachedData = await getCachedStockData(CACHE_KEYS.CURRENT);
-                    if (cachedData) {
+                    if (cachedData && Array.isArray(cachedData) && cachedData.length > 0 && cachedData.some(r => r.changePercent !== null)) {
                         return res.status(200).json(cachedData);
                     }
                 }
@@ -127,6 +117,15 @@ module.exports = async (req, res) => {
             quoteMap[quote.symbol] = quote;
         });
         
+        // Check if we have any valid quotes before proceeding
+        if (quotes.length === 0) {
+            const cachedData = await getCachedStockData(CACHE_KEYS.CURRENT);
+            if (cachedData && Array.isArray(cachedData) && cachedData.length > 0 && cachedData.some(r => r.changePercent !== null)) {
+                return res.status(200).json(cachedData);
+            }
+            return res.status(503).json({ error: 'Unable to fetch stock data. Please try again later.' });
+        }
+        
         // Calculate performance for each manager
         const results = await Promise.all(managers.map(async (manager, index) => {
             const symbol = manager.stockSymbol;
@@ -134,16 +133,8 @@ module.exports = async (req, res) => {
             const baselinePrice = baselinePrices[index];
             
             if (!quote || !baselinePrice) {
-                return {
-                    name: manager.name,
-                    symbol: symbol,
-                    currentPrice: 0,
-                    changePercent: null,
-                    change1d: null,
-                    change1m: null,
-                    change3m: null,
-                    analysis: manager.analysis || null // Include analysis even when no quote
-                };
+                // Skip entries without valid data - we'll filter them out
+                return null;
             }
             
             const currentPrice = quote.regularMarketPrice || quote.price || quote.regularMarketPreviousClose || 0;
@@ -186,43 +177,46 @@ module.exports = async (req, res) => {
             };
         }));
         
+        // Filter out null entries (entries without valid data)
+        const validResults = results.filter(r => r !== null);
+        
+        // If we have no valid results, try cache or return error
+        if (validResults.length === 0) {
+            const cachedData = await getCachedStockData(CACHE_KEYS.CURRENT);
+            if (cachedData && Array.isArray(cachedData) && cachedData.length > 0 && cachedData.some(r => r.changePercent !== null)) {
+                return res.status(200).json(cachedData);
+            }
+            return res.status(503).json({ error: 'Unable to fetch stock data. Please try again later.' });
+        }
+        
         // Sort by YTD percentage (descending)
-        results.sort((a, b) => {
+        validResults.sort((a, b) => {
             const aPercent = a.changePercent || -Infinity;
             const bPercent = b.changePercent || -Infinity;
             return bPercent - aPercent;
         });
         
         // Cache the results if we got valid data (even during market hours)
-        if (results.length > 0 && results.some(r => r.changePercent !== null && r.currentPrice > 0)) {
+        if (validResults.length > 0 && validResults.some(r => r.changePercent !== null && r.currentPrice > 0)) {
             // Calculate TTL based on market hours
             // During market hours: 15 minutes (900 seconds)
             // After market hours: 24 hours (86400 seconds)
             const ttlSeconds = isMarketOpen() ? 900 : 86400;
-            await setCachedStockData(CACHE_KEYS.CURRENT, results, ttlSeconds);
+            await setCachedStockData(CACHE_KEYS.CURRENT, validResults, ttlSeconds);
         }
         
-        res.status(200).json(results);
+        res.status(200).json(validResults);
     } catch (error) {
         console.error('Error fetching current stocks:', error);
         
         // If we have cached data, return it even on error
         const cachedData = await getCachedStockData(CACHE_KEYS.CURRENT);
-        if (cachedData) {
+        if (cachedData && Array.isArray(cachedData) && cachedData.length > 0 && cachedData.some(r => r.changePercent !== null)) {
             return res.status(200).json(cachedData);
         }
         
-        // If no cache, return empty structure so frontend doesn't break
-        const managers = loadManagersFromConfig();
-        res.status(200).json(managers.map(m => ({
-            name: m.name,
-            symbol: m.stockSymbol,
-            currentPrice: 0,
-            changePercent: null,
-            change1d: null,
-            change1m: null,
-            change3m: null
-        })));
+        // If no valid cache, return error response
+        res.status(503).json({ error: 'Failed to fetch stock data. Please try again later.' });
     }
 };
 

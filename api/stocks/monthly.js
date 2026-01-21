@@ -162,9 +162,21 @@ module.exports = async (req, res) => {
         
         const stockData = await Promise.all(stockDataPromises);
         
+        // Filter out entries with no data
+        const validStockData = stockData.filter(stock => stock.data && stock.data.length > 0);
+        
+        // If we have no valid data, try cache or return error
+        if (validStockData.length === 0) {
+            const cachedData = await getCachedStockData(CACHE_KEYS.MONTHLY);
+            if (cachedData && cachedData.data && Array.isArray(cachedData.data) && cachedData.data.length > 0) {
+                return res.status(200).json(cachedData);
+            }
+            return res.status(503).json({ error: 'Unable to fetch chart data. Please try again later.' });
+        }
+        
         const responseData = {
             months: monthLabels,
-            data: stockData
+            data: validStockData
         };
         
         // Cache the results (always cache, with appropriate TTL)
@@ -180,11 +192,11 @@ module.exports = async (req, res) => {
         
         // If we have cached data, return it even on error
         const cachedData = await getCachedStockData(CACHE_KEYS.MONTHLY);
-        if (cachedData) {
+        if (cachedData && cachedData.data && Array.isArray(cachedData.data) && cachedData.data.length > 0) {
             return res.status(200).json(cachedData);
         }
         
-        res.status(500).json({ error: 'Failed to fetch monthly stock data', details: error.message });
+        res.status(503).json({ error: 'Failed to fetch monthly stock data. Please try again later.' });
     }
 };
 

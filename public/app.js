@@ -509,10 +509,24 @@ async function fetchLeaderboardData() {
     if (!response.ok) {
         const errorText = await response.text();
         console.error('Leaderboard API error:', response.status, errorText);
+        // If it's a 503, the API couldn't get data - show error message
+        if (response.status === 503) {
+            try {
+                const errorData = JSON.parse(errorText);
+                throw new Error(errorData.error || 'Service temporarily unavailable');
+            } catch (e) {
+                throw new Error('Service temporarily unavailable. Please try again later.');
+            }
+        }
         throw new Error(`API error: ${response.status}`);
     }
     
     const data = await response.json();
+    
+    // Validate that we have actual data, not just null values
+    if (!data || !Array.isArray(data) || data.length === 0 || !data.some(item => item.changePercent !== null && item.currentPrice > 0)) {
+        throw new Error('No valid stock data available');
+    }
     console.log('Leaderboard data received:', data.length, 'items');
     
     // Extract analyses from the API response (analyses are now included in the response)
@@ -760,10 +774,24 @@ async function fetchChartData() {
     if (!response.ok) {
         const errorText = await response.text();
         console.error('Chart API error:', response.status, errorText);
+        // If it's a 503, the API couldn't get data - show error message
+        if (response.status === 503) {
+            try {
+                const errorData = JSON.parse(errorText);
+                throw new Error(errorData.error || 'Service temporarily unavailable');
+            } catch (e) {
+                throw new Error('Service temporarily unavailable. Please try again later.');
+            }
+        }
         throw new Error(`API error: ${response.status}`);
     }
     
     const chartData = await response.json();
+    
+    // Validate that we have actual data
+    if (!chartData || !chartData.data || !Array.isArray(chartData.data) || chartData.data.length === 0) {
+        throw new Error('No valid chart data available');
+    }
     console.log('Chart data received:', chartData);
     
     // Fetch current stock data to get accurate YTD percentages
