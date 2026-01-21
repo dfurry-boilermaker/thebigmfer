@@ -1694,30 +1694,40 @@ function renderChart(chartData, currentData) {
                     
                     console.log(`Collected ${labelData.length} labels`);
                     
-                    // Sort labels by YTD percentage (highest to lowest)
-                    labelData.sort((a, b) => b.ytdValue - a.ytdValue);
-                    
-                    // Lay out labels in a clean, evenly spaced vertical column on the right
+                    // We want labels to stay attached to their own line endpoints,
+                    // with only minimal adjustment to avoid overlaps and keep them on-screen.
                     const topBound = chartArea.top + cfg.labelTopMargin + cfg.textHeight / 2;
                     const bottomBound = chartArea.bottom - cfg.labelBottomMargin - cfg.textHeight / 2;
-                    const availableHeight = Math.max(bottomBound - topBound, cfg.textHeight);
-                    const count = labelData.length || 1;
-                    const baseSpacing = availableHeight / Math.max(count - 1, 1);
+                    const minSpacing = cfg.minSpacing;
                     
-                    labelData.forEach((label, index) => {
-                        // Even vertical spacing from top to bottom
-                        let targetY;
-                        if (count === 1) {
-                            targetY = (topBound + bottomBound) / 2;
-                        } else {
-                            targetY = topBound + index * baseSpacing;
-                        }
-                        label.y = targetY;
+                    // Sort by the original Y position so we adjust from top to bottom
+                    labelData.sort((a, b) => a.y - b.y);
+                    
+                    let lastY = null;
+                    labelData.forEach((label) => {
+                        // Start from the line's endpoint Y, clamped to chart bounds
+                        let y = Math.min(Math.max(label.y, topBound), bottomBound);
                         
-                        // Position horizontally as a right-side column just inside the chart
+                        // If this label is too close to the previous one, nudge it down a bit
+                        if (lastY !== null && y - lastY < minSpacing) {
+                            y = lastY + minSpacing;
+                            if (y > bottomBound) {
+                                y = bottomBound;
+                            }
+                        }
+                        
+                        label.y = y;
+                        lastY = y;
+                        
+                        // Keep X to the right of the last point, but ensure it stays inside the chart
                         const labelRightMargin = 10;
                         const maxX = chartArea.right - labelRightMargin;
-                        label.x = maxX - label.textWidth - cfg.rectPadding * 2;
+                        let x = label.x;
+                        const labelWidth = label.textWidth + cfg.rectPadding * 2;
+                        if (x + labelWidth > maxX) {
+                            x = maxX - labelWidth;
+                        }
+                        label.x = x;
                     });
                     
                     let drawnCount = 0;
