@@ -275,14 +275,30 @@ function loadManagersFromConfig() {
 // Get historical price for a specific date
 async function getHistoricalPrice(symbol, targetDate) {
     try {
-        const historical = await yahooFinance.historical(symbol, {
-            period1: new Date(targetDate).getTime() / 1000,
-            period2: new Date(targetDate).getTime() / 1000 + 86400, // Add 1 day
+        const targetTimestamp = new Date(targetDate).getTime() / 1000;
+        // Fetch a few days around the target date to handle weekends/holidays
+        const chartData = await yahooFinance.chart(symbol, {
+            period1: Math.floor(targetTimestamp - 5 * 86400), // 5 days before
+            period2: Math.floor(targetTimestamp + 2 * 86400), // 2 days after
+            interval: '1d'
         });
-        
-        if (historical && historical.length > 0) {
-            // Return the last entry (should be the target date)
-            return historical[historical.length - 1].close;
+
+        if (chartData && chartData.quotes && chartData.quotes.length > 0) {
+            // Find the quote closest to but not after the target date
+            const targetMs = new Date(targetDate).getTime();
+            let bestQuote = null;
+            for (const quote of chartData.quotes) {
+                const quoteDate = quote.date instanceof Date ? quote.date : new Date(quote.date);
+                if (quoteDate.getTime() <= targetMs && quote.close !== null) {
+                    bestQuote = quote;
+                }
+            }
+            if (bestQuote) {
+                return bestQuote.close;
+            }
+            // Fallback: return the first available close price
+            const firstValid = chartData.quotes.find(q => q.close !== null);
+            return firstValid ? firstValid.close : null;
         }
         return null;
     } catch (error) {

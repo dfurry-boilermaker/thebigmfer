@@ -35,14 +35,30 @@ function loadManagersFromConfig() {
 // Get historical price for a specific date
 async function getHistoricalPrice(symbol, targetDate) {
     try {
-        const historical = await yahooFinance.historical(symbol, {
-            period1: new Date(targetDate).getTime() / 1000,
-            period2: new Date(targetDate).getTime() / 1000 + 86400, // Add 1 day
+        const targetTimestamp = new Date(targetDate).getTime() / 1000;
+        // Fetch a few days around the target date to handle weekends/holidays
+        const chartData = await yahooFinance.chart(symbol, {
+            period1: Math.floor(targetTimestamp - 5 * 86400), // 5 days before
+            period2: Math.floor(targetTimestamp + 2 * 86400), // 2 days after
+            interval: '1d'
         });
-        
-        if (historical && historical.length > 0) {
-            // Return the last entry (should be the target date)
-            return historical[historical.length - 1].close;
+
+        if (chartData && chartData.quotes && chartData.quotes.length > 0) {
+            // Find the quote closest to but not after the target date
+            const targetMs = new Date(targetDate).getTime();
+            let bestQuote = null;
+            for (const quote of chartData.quotes) {
+                const quoteDate = quote.date instanceof Date ? quote.date : new Date(quote.date);
+                if (quoteDate.getTime() <= targetMs && quote.close !== null) {
+                    bestQuote = quote;
+                }
+            }
+            if (bestQuote) {
+                return bestQuote.close;
+            }
+            // Fallback: return the first available close price
+            const firstValid = chartData.quotes.find(q => q.close !== null);
+            return firstValid ? firstValid.close : null;
         }
         return null;
     } catch (error) {
@@ -173,9 +189,32 @@ app.get('/api/stocks/current', async (req, res) => {
             }
             
             // Calculate 1m and 3m changes (only if enough time has passed in 2026)
-            // Note: Historical data fetching for 1m/3m is not implemented yet
-            const change1m = null;
-            const change3m = null;
+            const yearStart = new Date(2026, 0, 1);
+            const today = new Date();
+            const daysSinceStart = Math.floor((today - yearStart) / (1000 * 60 * 60 * 24));
+
+            let change1m = null;
+            let change3m = null;
+
+            // Calculate 1m change if at least 30 days have passed
+            if (daysSinceStart >= 30) {
+                const oneMonthAgo = new Date(today);
+                oneMonthAgo.setDate(today.getDate() - 30);
+                const oneMonthPrice = await getHistoricalPrice(symbol, oneMonthAgo.toISOString().split('T')[0]);
+                if (oneMonthPrice && oneMonthPrice > 0) {
+                    change1m = ((currentPrice - oneMonthPrice) / oneMonthPrice) * 100;
+                }
+            }
+
+            // Calculate 3m change if at least 90 days have passed
+            if (daysSinceStart >= 90) {
+                const threeMonthsAgo = new Date(today);
+                threeMonthsAgo.setDate(today.getDate() - 90);
+                const threeMonthPrice = await getHistoricalPrice(symbol, threeMonthsAgo.toISOString().split('T')[0]);
+                if (threeMonthPrice && threeMonthPrice > 0) {
+                    change3m = ((currentPrice - threeMonthPrice) / threeMonthPrice) * 100;
+                }
+            }
             
             return {
                 name: manager.name,

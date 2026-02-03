@@ -1,15 +1,16 @@
 const YahooFinance = require('yahoo-finance2').default;
 const yahooFinance = new YahooFinance();
-const { 
-    loadManagersFromConfig, 
-    getBaselinePrices, 
+const {
+    loadManagersFromConfig,
+    getBaselinePrices,
     getYTDDividends,
-    shouldUseCache, 
-    getCachedStockData, 
-    setCachedStockData, 
+    getHistoricalPrice,
+    shouldUseCache,
+    getCachedStockData,
+    setCachedStockData,
     getLastUpdate,
     CACHE_KEYS,
-    isMarketOpen 
+    isMarketOpen
 } = require('../utils');
 
 module.exports = async (req, res) => {
@@ -27,7 +28,9 @@ module.exports = async (req, res) => {
     }
     
     // Check if we should use cached data (market is closed or rate limited)
-    const useCache = await shouldUseCache();
+    // Allow bypassing cache with ?refresh=true query param for testing
+    const forceRefresh = req.query && req.query.refresh === 'true';
+    const useCache = !forceRefresh && await shouldUseCache();
     if (useCache) {
         const cachedData = await getCachedStockData(CACHE_KEYS.CURRENT);
         if (cachedData) {
@@ -161,9 +164,32 @@ module.exports = async (req, res) => {
             }
             
             // Calculate 1m and 3m changes (only if enough time has passed in 2026)
-            // Note: Historical data fetching for 1m/3m is not implemented yet
-            const change1m = null;
-            const change3m = null;
+            const yearStart = new Date(2026, 0, 1);
+            const today = new Date();
+            const daysSinceStart = Math.floor((today - yearStart) / (1000 * 60 * 60 * 24));
+
+            let change1m = null;
+            let change3m = null;
+
+            // Calculate 1m change if at least 30 days have passed
+            if (daysSinceStart >= 30) {
+                const oneMonthAgo = new Date(today);
+                oneMonthAgo.setDate(today.getDate() - 30);
+                const oneMonthPrice = await getHistoricalPrice(symbol, oneMonthAgo.toISOString().split('T')[0]);
+                if (oneMonthPrice && oneMonthPrice > 0) {
+                    change1m = ((currentPrice - oneMonthPrice) / oneMonthPrice) * 100;
+                }
+            }
+
+            // Calculate 3m change if at least 90 days have passed
+            if (daysSinceStart >= 90) {
+                const threeMonthsAgo = new Date(today);
+                threeMonthsAgo.setDate(today.getDate() - 90);
+                const threeMonthPrice = await getHistoricalPrice(symbol, threeMonthsAgo.toISOString().split('T')[0]);
+                if (threeMonthPrice && threeMonthPrice > 0) {
+                    change3m = ((currentPrice - threeMonthPrice) / threeMonthPrice) * 100;
+                }
+            }
             
             return {
                 name: manager.name,
