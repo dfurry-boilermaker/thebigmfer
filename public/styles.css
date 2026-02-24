@@ -996,7 +996,8 @@ section h2 {
     }
 
     .manager-info .current-price {
-        display: none;
+        display: inline;
+        font-size: 0.8125rem;
     }
     
     .manager-info .time-periods {
