@@ -1220,22 +1220,18 @@ function renderChart(chartData, currentData) {
             }
         });
     });
-    // Also add dates from the dates array if they're not already included (but only up to today)
-    dates.forEach(date => {
-        const ts = date.getTime();
-        if (ts >= firstTradingDay.getTime() && ts <= todayTimestamp && !allUniqueTimestamps.includes(ts)) {
-            allUniqueTimestamps.push(ts);
-        }
-    });
+    // Note: we intentionally do NOT merge the synthetic `dates` array here.
+    // Using only actual API timestamps keeps every x-axis index evenly spaced.
     // Sort timestamps and create index mapping (only up to today)
     allUniqueTimestamps.sort((a, b) => a - b);
-    // Filter out future timestamps before creating the mapping
+    // Only use actual data timestamps (no synthetic dates) so every index
+    // represents one real data point, giving a consistent x-axis scale.
     const filteredTimestamps = allUniqueTimestamps.filter(ts => ts <= todayTimestamp);
     const timestampToIndex = new Map();
     filteredTimestamps.forEach((ts, idx) => {
         timestampToIndex.set(ts, idx);
     });
-    
+
     // Create label mapping from trading day indices to dates (only up to today)
     const indexToDateLabel = new Map();
     filteredTimestamps.forEach((ts, idx) => {
