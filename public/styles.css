@@ -610,7 +610,7 @@ section h2 {
     }
 
     .time-periods {
-        gap: 2px;
+        gap: 8px;
         flex-wrap: nowrap;
         justify-content: flex-end;
     }
@@ -1004,7 +1004,7 @@ section h2 {
     }
 
     .price-percent-combined .time-periods {
-        gap: 2px;
+        gap: 8px;
     }
 
     .time-period {
