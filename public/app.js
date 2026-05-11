@@ -716,7 +716,10 @@ function formatPrice(price) {
 
 function formatPercent(percent) {
     if (percent === null || percent === undefined) return '0.00';
-    return Math.abs(Number(percent)).toFixed(2);
+    const abs = Math.abs(Number(percent));
+    if (abs >= 100) return abs.toFixed(0);
+    if (abs >= 10) return abs.toFixed(1);
+    return abs.toFixed(2);
 }
 
 function escapeHtml(text) {
