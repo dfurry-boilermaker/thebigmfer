@@ -580,39 +580,35 @@ section h2 {
 
 @media (max-width: 480px) {
     .leaderboard-item {
-        grid-template-columns: 28px 1fr;
+        grid-template-columns: 20px auto 1fr;
         grid-template-rows: auto auto;
-        gap: 6px;
-        padding: 12px;
+        gap: 4px;
+        padding: 10px 8px;
         min-height: 50px;
     }
-    
+
     .analysis-text {
         font-size: 0.875rem;
         padding: 0 12px;
         line-height: 1.5;
     }
-    
+
     .analysis-content.expanded {
         margin-top: 8px;
     }
-    
+
     .price-percent-combined {
-        grid-column: 1 / -1;
         display: flex;
-        flex-direction: row;
-        justify-content: space-between;
-        align-items: center;
-        margin-top: 4px;
-        padding-left: 34px;
-        gap: 8px;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0;
     }
-    
+
     .current-price {
         white-space: nowrap;
         flex-shrink: 0;
     }
-    
+
     .time-periods {
         gap: 2px;
         flex-wrap: nowrap;
@@ -715,11 +711,11 @@ section h2 {
 
 @media (max-width: 480px) {
     .mobile-only {
-        display: flex;
-    }
-    
-    .desktop-only {
         display: none;
+    }
+
+    .desktop-only {
+        display: flex;
     }
 }
 
@@ -890,7 +886,7 @@ section h2 {
 
 @media (max-width: 480px) {
     .container {
-        padding: 0 16px;
+        padding: 0 8px;
     }
 
     header {
@@ -970,53 +966,51 @@ section h2 {
     }
 
     .leaderboard-item {
-        grid-template-columns: 28px 1fr;
-        gap: 8px;
-        padding: 12px;
+        grid-template-columns: 20px auto 1fr;
+        gap: 4px;
+        padding: 10px 8px;
     }
 
     .rank {
-        font-size: 0.75rem;
+        font-size: 0.6875rem;
     }
 
     .manager-info {
         display: flex;
         flex-direction: row;
         align-items: center;
-        gap: 6px;
-        flex-wrap: wrap;
+        gap: 4px;
+        flex-wrap: nowrap;
+        white-space: nowrap;
     }
 
     .manager-name {
-        font-size: 0.8125rem;
+        font-size: 0.6875rem;
     }
 
     .stock-symbol {
-        font-size: 0.8125rem;
+        font-size: 0.6875rem;
     }
 
     .manager-info .current-price {
         display: inline;
-        font-size: 0.8125rem;
-    }
-    
-    .manager-info .time-periods {
-        display: flex;
-        flex-direction: row;
-        gap: 2px;
-        align-items: center;
-        width: 100%;
-        justify-content: flex-end;
+        font-size: 0.6875rem;
     }
 
     .price-percent-combined {
-        display: none;
+        display: flex;
+        align-items: flex-end;
+        gap: 0;
+    }
+
+    .price-percent-combined .time-periods {
+        gap: 2px;
     }
 
     .time-period {
         min-width: 0;
         flex: 1 1 0;
-        flex-shrink: 1;
+        gap: 1px;
     }
 
     .current-price {
@@ -1025,11 +1019,11 @@ section h2 {
     }
 
     .period-label {
-        font-size: 0.5625rem;
+        font-size: 0.5rem;
     }
 
     .period-value {
-        font-size: 0.6875rem;
+        font-size: 0.625rem;
         white-space: nowrap;
     }
 }
