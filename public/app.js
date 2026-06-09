@@ -634,7 +634,7 @@ function renderLeaderboard(data) {
         const vsSpy = spyYtd !== null && item.changePercent !== null ? item.changePercent - spyYtd : null;
         const vsSpyClass = vsSpy !== null ? (vsSpy >= 0 ? 'positive' : 'negative') : 'no-data';
         const volValue = volatilityBySymbol[item.symbol];
-        const volText = Number.isFinite(volValue) ? `${volValue.toFixed(1)} pts` : '-';
+        const volText = Number.isFinite(volValue) ? `${volValue.toFixed(1)} pct pts` : '-';
 
         // Get analysis for this manager
         // First check if analysis is directly on the item (from API), otherwise check managerAnalyses
@@ -1771,7 +1771,7 @@ function renderPackSummary(stocksInRange, ytdMap, zoomMin, zoomMax) {
     summary.innerHTML = `
         <span class="pack-pill">${stocksInRange.length} in view</span>
         <span class="pack-pill">Pack lead: ${escapeHtml(leader.name)} ${formatSignedPercentValue(ytdMap[leader.symbol])}</span>
-        <span class="pack-pill">Spread: ${spread.toFixed(1)} pts</span>
+        <span class="pack-pill">Spread: ${spread.toFixed(1)} pct pts</span>
     `;
 }
 
@@ -1874,7 +1874,7 @@ function renderPackRace(stocksInRange, ytdMap, currentData, chartData, colors) {
                     ${buildSparkline(series, color)}
                 </div>
                 <div class="pack-race-metrics">
-                    <span><strong>${index === 0 ? 'Lead' : `${gapToLead.toFixed(1)} pts`}</strong><small>Gap</small></span>
+                    <span><strong>${index === 0 ? 'Lead' : `${gapToLead.toFixed(1)} pct pts`}</strong><small>Gap</small></span>
                     <span><strong>${vsMedian === null ? '-' : formatSignedPercentValue(vsMedian)}</strong><small>vs Median</small></span>
                     <span><strong>${recentMove === null ? '-' : formatSignedPercentValue(recentMove)}</strong><small>Recent</small></span>
                 </div>
@@ -2238,12 +2238,12 @@ function renderStats(chartData, currentData) {
             </div>
             <div class="summary-card">
                 <span class="summary-label">Field spread</span>
-                <strong>${fieldSpread.toFixed(1)} pts</strong>
+                <strong>${fieldSpread.toFixed(1)} pct pts</strong>
                 <span class="summary-note">Leader to laggard</span>
             </div>
             <div class="summary-card">
                 <span class="summary-label">Dispersion</span>
-                <strong>${stdDev.toFixed(1)} pts</strong>
+                <strong>${stdDev.toFixed(1)} pct pts</strong>
                 <span class="summary-note">Standard deviation</span>
             </div>
         </div>
