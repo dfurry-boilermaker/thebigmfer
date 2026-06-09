@@ -1,25 +1,17 @@
 {
   "functions": {
     "api/stocks/current.js": {
-      "maxDuration": 10
+      "maxDuration": 30
     },
     "api/stocks/monthly.js": {
-      "maxDuration": 10
+      "maxDuration": 30
     },
     "api/analyses.js": {
       "maxDuration": 10
     },
     "api/indexes.js": {
-      "maxDuration": 10
-    },
-    "api/cron/refresh-cache.js": {
       "maxDuration": 30
     }
-  },
-  "crons": [
-    {
-      "path": "/api/cron/refresh-cache",
-      "schedule": "*/15 13-21 * * 1-5"
-    }
-  ]
+  }
 }
+

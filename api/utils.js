@@ -1,190 +1,290 @@
+// Shared utility functions for Vercel API routes
 const path = require('path');
 const fs = require('fs');
 const YahooFinance = require('yahoo-finance2').default;
 const yahooFinance = new YahooFinance();
 
-// In-memory cache (persists within a single serverless instance).
-// On cold start the cron job repopulates within 15 minutes.
-const kv = null;
+// Initialize Vercel Edge Config (read-only)
+// Edge Config connection string is automatically provided by Vercel via EDGE_CONFIG env var
+// when you link an Edge Config to your project in the Vercel dashboard
+let edgeConfig = null;
+const EDGE_CONFIG_ID = 'ecfg_nihngnn5iudhcegkbld1erbfsfj6';
+const EDGE_CONFIG_DIGEST = '5bf6b008a9ec05f6870c476d10b53211797aa000f95aae344ae60f9b422286da';
 
-// In-memory fallback for local dev (or when KV is unavailable)
-const memoryCache = {};
+try {
+    let connectionString = process.env.EDGE_CONFIG;
+    
+    // Fallback: construct connection string from provided credentials if EDGE_CONFIG not set
+    if (!connectionString) {
+        // Edge Config connection string format: https://edge-config.vercel.com/{id}?token={digest}
+        connectionString = `https://edge-config.vercel.com/${EDGE_CONFIG_ID}?token=${EDGE_CONFIG_DIGEST}`;
+    }
+    
+    edgeConfig = require('@vercel/edge-config').createClient(connectionString);
+} catch (error) {
+    // Edge Config initialization failed, fallback to in-memory cache only
+    edgeConfig = null;
+}
 
+// In-memory cache (primary storage, with Edge Config as read-only backup)
+let stockDataCache = {
+    current: null,
+    monthly: null,
+    baselinePrices: null, // Dec 31, 2025 prices (permanent cache)
+    lastUpdate: null,
+    marketWasOpen: false
+};
+
+// Cache key constants
 const CACHE_KEYS = {
     CURRENT: 'stock:current',
     MONTHLY: 'stock:monthly',
-    INDEXES: 'stock:indexes',
-    BASELINE_PRICES: 'stock:baselinePrices',
-    REFRESH_LOCK: 'stock:refreshLock'
+    LAST_UPDATE: 'stock:lastUpdate',
+    MARKET_WAS_OPEN: 'stock:marketWasOpen',
+    BASELINE_PRICES: 'stock:baselinePrices' // Dec 31, 2025 prices (never change)
 };
 
-// --- Cache read/write (KV with in-memory fallback) ---
-
-async function getCachedData(key) {
-    if (kv) {
-        try {
-            return await kv.get(key);
-        } catch (e) {
-            // KV unavailable, fall through to memory
+// Get cached stock data from Vercel Edge Config
+async function getCachedStockData(key) {
+    // Always check in-memory cache first (fastest)
+    if (key === CACHE_KEYS.CURRENT && stockDataCache.current) {
+        // Check if in-memory cache is still valid
+        if (stockDataCache.lastUpdate) {
+            const cacheAge = Date.now() - stockDataCache.lastUpdate;
+            const maxAge = isMarketOpen() ? 15 * 60 * 1000 : 24 * 60 * 60 * 1000;
+            if (cacheAge < maxAge) {
+                return stockDataCache.current;
+            }
         }
     }
-    const entry = memoryCache[key];
-    if (!entry) return null;
-    if (entry.expiresAt && Date.now() > entry.expiresAt) {
-        delete memoryCache[key];
-        return null;
-    }
-    return entry.data;
-}
-
-async function setCachedData(key, data, ttlSeconds) {
-    if (kv) {
-        try {
-            await kv.set(key, data, { ex: ttlSeconds });
-            return;
-        } catch (e) {
-            // KV unavailable, fall through to memory
+    if (key === CACHE_KEYS.MONTHLY && stockDataCache.monthly) {
+        if (stockDataCache.lastUpdate) {
+            const cacheAge = Date.now() - stockDataCache.lastUpdate;
+            const maxAge = isMarketOpen() ? 15 * 60 * 1000 : 24 * 60 * 60 * 1000;
+            if (cacheAge < maxAge) {
+                return stockDataCache.monthly;
+            }
         }
     }
-    memoryCache[key] = {
-        data,
-        expiresAt: ttlSeconds ? Date.now() + ttlSeconds * 1000 : null
-    };
-}
-
-// Check if cached data is stale (past its refresh window, but KV TTL hasn't expired yet)
-async function isStale(key) {
-    const tsKey = `${key}:ts`;
-    let lastUpdate = null;
-    if (kv) {
-        try { lastUpdate = await kv.get(tsKey); } catch (e) {}
+    // Baseline prices are cached permanently (no expiration check)
+    if (key === CACHE_KEYS.BASELINE_PRICES && stockDataCache.baselinePrices) {
+        return stockDataCache.baselinePrices;
     }
-    if (!lastUpdate && memoryCache[tsKey]) {
-        lastUpdate = memoryCache[tsKey].data;
-    }
-    if (!lastUpdate) return true;
-    const age = Date.now() - lastUpdate;
-    const maxFresh = isMarketOpen() ? 15 * 60 * 1000 : 24 * 60 * 60 * 1000;
-    return age > maxFresh;
-}
-
-async function markRefreshed(key) {
-    const tsKey = `${key}:ts`;
-    const now = Date.now();
-    if (kv) {
-        try { await kv.set(tsKey, now, { ex: 86400 }); } catch (e) {}
-    }
-    memoryCache[tsKey] = { data: now, expiresAt: null };
-}
-
-// Acquire a refresh lock (prevents concurrent cron re-triggers)
-async function acquireRefreshLock(ttlSeconds = 25) {
-    if (kv) {
+    
+    // Try Edge Config (read-only, very fast)
+    if (edgeConfig) {
         try {
-            const result = await kv.set(CACHE_KEYS.REFRESH_LOCK, 1, { ex: ttlSeconds, nx: true });
-            return result === 'OK';
-        } catch (e) {
-            return true; // If KV fails, allow refresh
+            const data = await edgeConfig.get(key);
+            if (data) {
+                // Edge Config stores JSON strings, parse if needed
+                const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+                // Also update in-memory cache for faster subsequent reads
+                if (key === CACHE_KEYS.CURRENT) stockDataCache.current = parsed;
+                if (key === CACHE_KEYS.MONTHLY) stockDataCache.monthly = parsed;
+                if (key === CACHE_KEYS.BASELINE_PRICES) stockDataCache.baselinePrices = parsed;
+                return parsed;
+            }
+        } catch (error) {
+            // Edge Config read failed, continue to fallback
         }
     }
-    if (memoryCache[CACHE_KEYS.REFRESH_LOCK]) {
-        const entry = memoryCache[CACHE_KEYS.REFRESH_LOCK];
-        if (entry.expiresAt && Date.now() < entry.expiresAt) return false;
+    
+    // Fallback to in-memory cache (even if expired)
+    if (key === CACHE_KEYS.CURRENT) return stockDataCache.current;
+    if (key === CACHE_KEYS.MONTHLY) return stockDataCache.monthly;
+    if (key === CACHE_KEYS.BASELINE_PRICES) return stockDataCache.baselinePrices;
+    return null;
+}
+
+// Set cached stock data (primarily in-memory)
+// Note: Edge Config free tier has 100 writes/month limit, so we use in-memory as primary
+// Edge Config is used only for reads (very fast), writes stay in-memory
+async function setCachedStockData(key, data, ttlSeconds) {
+    // Always update in-memory cache (primary storage)
+    if (key === CACHE_KEYS.CURRENT) stockDataCache.current = data;
+    if (key === CACHE_KEYS.MONTHLY) stockDataCache.monthly = data;
+    if (key === CACHE_KEYS.BASELINE_PRICES) stockDataCache.baselinePrices = data;
+    
+    // Only update lastUpdate for time-sensitive data (not baseline prices)
+    if (key !== CACHE_KEYS.BASELINE_PRICES) {
+        stockDataCache.lastUpdate = Date.now();
     }
-    memoryCache[CACHE_KEYS.REFRESH_LOCK] = {
-        data: 1,
-        expiresAt: Date.now() + ttlSeconds * 1000
-    };
+    
+    // Note: Edge Config writes require Vercel API token (not digest) and are rate-limited
+    // We skip writes to Edge Config and rely on in-memory cache as primary
+    // Edge Config will be used for reads only (when available from previous writes via dashboard/API)
+}
+
+// Get last update timestamp
+async function getLastUpdate() {
+    // Check in-memory cache first
+    if (stockDataCache.lastUpdate) {
+        return stockDataCache.lastUpdate;
+    }
+    
+    // Try Edge Config
+    if (edgeConfig) {
+        try {
+            const timestamp = await edgeConfig.get(CACHE_KEYS.LAST_UPDATE);
+            if (timestamp) {
+                const parsed = parseInt(timestamp);
+                stockDataCache.lastUpdate = parsed;
+                return parsed;
+            }
+        } catch (error) {
+            // Edge Config read failed, continue to fallback
+        }
+    }
+    
+    return null;
+}
+
+// Check if a date is a trading day (weekday and not a holiday)
+function isTradingDay(date) {
+    // Convert date to Eastern Time
+    const etString = date.toLocaleString('en-US', { timeZone: 'America/New_York' });
+    const et = new Date(etString);
+    
+    const day = et.getDay(); // 0 = Sunday, 6 = Saturday
+    
+    // Exclude weekends
+    if (day === 0 || day === 6) {
+        return false;
+    }
+    
+    // Check if it's a market holiday in 2026
+    const year = et.getFullYear();
+    const month = et.getMonth();
+    const dayOfMonth = et.getDate();
+    
+    // 2026 US Market Holidays (NYSE/NASDAQ)
+    const holidays2026 = [
+        { month: 0, day: 1 },   // New Year's Day (Jan 1)
+        { month: 0, day: 19 },  // Martin Luther King Jr. Day (Jan 19 - 3rd Monday)
+        { month: 1, day: 16 },  // Presidents' Day (Feb 16 - 3rd Monday)
+        { month: 3, day: 3 },   // Good Friday (Apr 3)
+        { month: 4, day: 25 },  // Memorial Day (May 25 - last Monday)
+        { month: 6, day: 3 },   // Independence Day (Jul 3 - observed, since Jul 4 is Saturday)
+        { month: 8, day: 7 },   // Labor Day (Sep 7 - 1st Monday)
+        { month: 10, day: 11 }, // Veterans Day (Nov 11)
+        { month: 10, day: 26 }, // Thanksgiving (Nov 26 - 4th Thursday)
+        { month: 11, day: 25 }  // Christmas (Dec 25)
+    ];
+    
+    // Check if date matches any holiday
+    for (const holiday of holidays2026) {
+        if (holiday.month === month && holiday.day === dayOfMonth) {
+            return false;
+        }
+    }
+    
     return true;
 }
 
-// --- Timeout wrapper for Yahoo Finance calls ---
-
-async function fetchWithTimeout(fetchFn, timeoutMs = 5000) {
-    return Promise.race([
-        fetchFn(),
-        new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Yahoo Finance timeout')), timeoutMs)
-        )
-    ]);
-}
-
-// Fetch quotes for multiple symbols with parallel fallback
-async function fetchQuotesBatched(symbols, timeoutMs = 5000) {
-    // Try batch first
-    try {
-        const result = await fetchWithTimeout(() => yahooFinance.quote(symbols), timeoutMs);
-        return Array.isArray(result) ? result : [result];
-    } catch (e) {
-        // Fallback: individual parallel fetches
-        const results = await Promise.allSettled(
-            symbols.map(symbol =>
-                fetchWithTimeout(() => yahooFinance.quote(symbol), timeoutMs)
-            )
-        );
-        return results
-            .filter(r => r.status === 'fulfilled' && r.value)
-            .map(r => Array.isArray(r.value) ? r.value[0] : r.value);
+function isDuringMarketHours(date) {
+    // Convert date to Eastern Time
+    const etString = date.toLocaleString('en-US', { timeZone: 'America/New_York' });
+    const et = new Date(etString);
+    
+    const day = et.getDay(); // 0 = Sunday, 6 = Saturday
+    
+    // Market is closed on weekends
+    if (day === 0 || day === 6) {
+        return false;
     }
+    
+    const hour = et.getHours();
+    const minute = et.getMinutes();
+    const time = hour * 60 + minute; // Time in minutes since midnight
+    
+    // Market hours: 9:30 AM - 4:00 PM ET
+    const marketOpen = 9 * 60 + 30; // 9:30 AM
+    const marketClose = 16 * 60; // 4:00 PM
+    
+    return time >= marketOpen && time < marketClose;
 }
 
-// --- Market hours / trading day helpers ---
-
+// Check if US stock market is currently open
 function isMarketOpen() {
     return isDuringMarketHours(new Date());
 }
 
-function isDuringMarketHours(date) {
-    const etString = date.toLocaleString('en-US', { timeZone: 'America/New_York' });
-    const et = new Date(etString);
-    const day = et.getDay();
-    if (day === 0 || day === 6) return false;
-    const time = et.getHours() * 60 + et.getMinutes();
-    return time >= 570 && time < 960; // 9:30 AM - 4:00 PM
+// Check if we should use cached data (async version for KV)
+async function shouldUseCache() {
+    const lastUpdate = await getLastUpdate();
+    
+    if (!lastUpdate) {
+        return false;
+    }
+    
+    const cacheAge = Date.now() - lastUpdate;
+    
+    // During market hours: use cache if less than 30 minutes old (matches refresh interval)
+    if (isMarketOpen()) {
+        const maxCacheAgeMarketHours = 30 * 60 * 1000; // 30 minutes
+        if (cacheAge < maxCacheAgeMarketHours) {
+            return true;
+        }
+    } else {
+        // Market closed: use cache if less than 24 hours old
+        const maxCacheAge = 24 * 60 * 60 * 1000; // 24 hours
+        if (cacheAge < maxCacheAge) {
+            return true;
+        }
+    }
+    
+    return false;
 }
 
-function isTradingDay(date) {
-    const etString = date.toLocaleString('en-US', { timeZone: 'America/New_York' });
-    const et = new Date(etString);
-    const day = et.getDay();
-    if (day === 0 || day === 6) return false;
-    const month = et.getMonth();
-    const dayOfMonth = et.getDate();
-    const holidays2026 = [
-        { month: 0, day: 1 }, { month: 0, day: 19 },
-        { month: 1, day: 16 }, { month: 3, day: 3 },
-        { month: 4, day: 25 }, { month: 5, day: 19 },
-        { month: 6, day: 3 }, { month: 8, day: 7 },
-        { month: 10, day: 26 }, { month: 11, day: 25 }
-    ];
-    return !holidays2026.some(h => h.month === month && h.day === dayOfMonth);
+// Synchronous version for backward compatibility (checks in-memory cache only)
+function shouldUseCacheSync() {
+    if (stockDataCache.current && stockDataCache.lastUpdate) {
+        const cacheAge = Date.now() - stockDataCache.lastUpdate;
+        
+        // During market hours: use cache if less than 30 minutes old
+        if (isMarketOpen()) {
+            const maxCacheAgeMarketHours = 30 * 60 * 1000; // 30 minutes
+            if (cacheAge < maxCacheAgeMarketHours) {
+                return true;
+            }
+        } else {
+            // Market closed: use cache if less than 24 hours old
+            const maxCacheAge = 24 * 60 * 60 * 1000; // 24 hours
+            if (cacheAge < maxCacheAge) {
+                return true;
+            }
+        }
+    }
+    
+    return false;
 }
 
-// --- Data fetching helpers ---
-
+// Load managers from JSON file
 function loadManagersFromConfig() {
     try {
+        // In Vercel, __dirname points to the api directory, so go up one level
         const configPath = path.join(process.cwd(), 'managers.json');
         const configData = fs.readFileSync(configPath, 'utf8');
         return JSON.parse(configData);
     } catch (error) {
-        console.error('Error loading managers.json:', error.message);
+        console.error('Error loading managers.json:', error);
         return [];
     }
 }
 
-async function getHistoricalPrice(symbol, targetDate, timeoutMs = 5000) {
+// Get historical price for a specific date
+async function getHistoricalPrice(symbol, targetDate) {
     try {
         const targetTimestamp = new Date(targetDate).getTime() / 1000;
-        const chartData = await fetchWithTimeout(() =>
-            yahooFinance.chart(symbol, {
-                period1: Math.floor(targetTimestamp - 5 * 86400),
-                period2: Math.floor(targetTimestamp + 2 * 86400),
-                interval: '1d'
-            }), timeoutMs
-        );
+        // Fetch a few days around the target date to handle weekends/holidays
+        const chartData = await yahooFinance.chart(symbol, {
+            period1: Math.floor(targetTimestamp - 5 * 86400), // 5 days before
+            period2: Math.floor(targetTimestamp + 2 * 86400), // 2 days after
+            interval: '1d'
+        });
 
         if (chartData && chartData.quotes && chartData.quotes.length > 0) {
+            // Find the quote closest to but not after the target date
             const targetMs = new Date(targetDate).getTime();
             let bestQuote = null;
             for (const quote of chartData.quotes) {
@@ -193,117 +293,436 @@ async function getHistoricalPrice(symbol, targetDate, timeoutMs = 5000) {
                     bestQuote = quote;
                 }
             }
-            if (bestQuote) return bestQuote.close;
+            if (bestQuote) {
+                return bestQuote.close;
+            }
+            // Fallback: return the first available close price
             const firstValid = chartData.quotes.find(q => q.close !== null);
             return firstValid ? firstValid.close : null;
         }
         return null;
     } catch (error) {
+        console.error(`Error fetching historical price for ${symbol}:`, error.message);
         return null;
     }
 }
 
-// Get baseline prices with permanent caching in KV
+// Get baseline prices (Dec 31, 2025) with permanent caching
+// These prices never change, so we cache them indefinitely
 async function getBaselinePrices(symbols) {
-    const cached = await getCachedData(CACHE_KEYS.BASELINE_PRICES);
-    if (cached && typeof cached === 'object') {
-        const allPresent = symbols.every(s => cached.hasOwnProperty(s) && cached[s] !== null);
-        if (allPresent) return symbols.map(s => cached[s]);
+    // Check cache first
+    const cachedBaselines = await getCachedStockData(CACHE_KEYS.BASELINE_PRICES);
+    if (cachedBaselines && Object.keys(cachedBaselines).length === symbols.length) {
+        // Verify all symbols are present
+        const allPresent = symbols.every(symbol => cachedBaselines.hasOwnProperty(symbol));
+        if (allPresent) {
+            return symbols.map(symbol => cachedBaselines[symbol]);
+        }
     }
-
-    // Fetch in parallel with timeouts
-    const results = await Promise.allSettled(
-        symbols.map(s => getHistoricalPrice(s, '2025-12-31', 8000))
+    
+    // Fetch baseline prices if not cached
+    const baselineDate = '2025-12-31';
+    const baselinePromises = symbols.map(symbol => 
+        getHistoricalPrice(symbol, baselineDate)
     );
-    const prices = results.map(r => r.status === 'fulfilled' ? r.value : null);
-
+    const baselinePrices = await Promise.all(baselinePromises);
+    
+    // Create a map of symbol to price for caching
     const baselineMap = {};
-    symbols.forEach((s, i) => {
-        if (prices[i] !== null) baselineMap[s] = prices[i];
+    symbols.forEach((symbol, index) => {
+        if (baselinePrices[index] !== null && baselinePrices[index] !== undefined) {
+            baselineMap[symbol] = baselinePrices[index];
+        }
     });
-
-    if (Object.keys(baselineMap).length > 0) {
-        await setCachedData(CACHE_KEYS.BASELINE_PRICES, baselineMap, 365 * 24 * 3600);
-    }
-    return prices;
+    
+    // Cache permanently (use a very long TTL - 1 year = 31536000 seconds)
+    // Edge Config doesn't support permanent storage, but in-memory cache will persist
+    // For Edge Config, we'll use a long TTL and refresh if needed
+    await setCachedStockData(CACHE_KEYS.BASELINE_PRICES, baselineMap, 31536000);
+    
+    return baselinePrices;
 }
 
-// Get YTD dividends (percentage of baseline price)
-async function getYTDDividends(symbol, baselinePrice, timeoutMs = 5000) {
-    if (!baselinePrice || baselinePrice <= 0) return 0;
+// Get YTD dividends for a symbol (dividends paid since Jan 1, 2026)
+async function getYTDDividends(symbol, baselinePrice) {
     try {
-        const quoteSummary = await fetchWithTimeout(() =>
-            yahooFinance.quoteSummary(symbol, { modules: ['summaryDetail'] }),
-            timeoutMs
-        );
-        if (!quoteSummary || !quoteSummary.summaryDetail) return 0;
-
-        const annualRate = quoteSummary.summaryDetail.dividendRate ||
-            quoteSummary.summaryDetail.trailingAnnualDividendRate || 0;
-        if (annualRate === 0) return 0;
-
+        // Fetch dividend information from quoteSummary
+        const quoteSummary = await yahooFinance.quoteSummary(symbol, {
+            modules: ['summaryDetail', 'calendarEvents']
+        });
+        
+        if (!quoteSummary || !quoteSummary.summaryDetail) {
+            return 0;
+        }
+        
+        const summaryDetail = quoteSummary.summaryDetail;
+        const calendarEvents = quoteSummary.calendarEvents;
+        
+        // Get annual dividend rate
+        const annualDividendRate = summaryDetail.dividendRate || summaryDetail.trailingAnnualDividendRate || 0;
+        
+        if (annualDividendRate === 0) {
+            return 0; // No dividends
+        }
+        
+        // Calculate YTD dividends based on quarterly payments
         const today = new Date();
         const yearStart = new Date(2026, 0, 1);
         const daysSinceStart = Math.floor((today - yearStart) / (1000 * 60 * 60 * 24));
-        const perQuarter = annualRate / 4;
-
-        let paid = 0;
-        if (daysSinceStart >= 90) paid += perQuarter;
-        if (daysSinceStart >= 181) paid += perQuarter;
-        if (daysSinceStart >= 273) paid += perQuarter;
-
-        return (paid / baselinePrice) * 100;
-    } catch (e) {
+        
+        // Most stocks pay quarterly (4 times per year)
+        const estimatedDividendFrequency = 4;
+        const dividendPerPeriod = annualDividendRate / estimatedDividendFrequency;
+        
+        // Calculate how many dividend periods have passed
+        // Quarterly payments: Q1 (end of March), Q2 (end of June), Q3 (end of Sept), Q4 (end of Dec)
+        let dividendsPaid = 0;
+        if (daysSinceStart >= 90) dividendsPaid += dividendPerPeriod;  // After Q1
+        if (daysSinceStart >= 181) dividendsPaid += dividendPerPeriod; // After Q2
+        if (daysSinceStart >= 273) dividendsPaid += dividendPerPeriod; // After Q3
+        
+        // Check if there's an ex-dividend date that has already passed
+        if (calendarEvents?.exDividendDate) {
+            const exDividendDate = new Date(calendarEvents.exDividendDate);
+            if (exDividendDate >= yearStart && exDividendDate <= today && calendarEvents.dividendDate) {
+                const dividendPaymentDate = new Date(calendarEvents.dividendDate);
+                if (dividendPaymentDate <= today) {
+                    dividendsPaid += dividendPerPeriod;
+                }
+            }
+        }
+        
+        // Convert dividend amount to percentage of baseline price
+        const dividendYield = baselinePrice > 0 ? (dividendsPaid / baselinePrice) * 100 : 0;
+        
+        return dividendYield;
+    } catch (error) {
+        // Return 0 if we can't fetch dividends (non-critical error)
         return 0;
     }
 }
 
-// Pick chart interval based on how far into the year we are
-function ytdInterval(currentMonth) {
-    if (currentMonth <= 1) return '1d';
-    if (currentMonth <= 5) return '1wk';
-    return '1mo';
+// Get intraday/hourly data for a symbol
+async function getIntradayData(symbol, startDate, endDate, interval = '1h') {
+    try {
+        // Use chart() method for intraday data (supports hourly intervals)
+        // This is the recommended method for intraday data in yahoo-finance2
+        const chartData = await yahooFinance.chart(symbol, {
+            period1: Math.floor(startDate.getTime() / 1000),
+            period2: Math.floor(endDate.getTime() / 1000),
+            interval: interval
+        });
+        
+        if (chartData && chartData.quotes && chartData.quotes.length > 0) {
+            // Convert chart format to historical format for consistency
+            // Chart returns dates as Date objects
+            // Filter to only include market hours data (9:30 AM - 4:00 PM ET, weekdays)
+            const filteredQuotes = chartData.quotes.map(quote => {
+                // quote.date is already a Date object
+                const date = quote.date instanceof Date ? quote.date : new Date(quote.date);
+                return {
+                    date: date,
+                    close: quote.close,
+                    open: quote.open,
+                    high: quote.high,
+                    low: quote.low,
+                    volume: quote.volume
+                };
+            }).filter(quote => {
+                // Filter out invalid dates or null closes
+                if (!quote.date || quote.close === null || quote.close === undefined) {
+                    return false;
+                }
+                // Only include data during market hours (9:30 AM - 4:00 PM ET) and on trading days
+                return isDuringMarketHours(quote.date) && isTradingDay(quote.date);
+            });
+            
+            // Expand hourly data to include both open and close prices for each hour
+            // This provides more granular intraday movement
+            const expandedData = [];
+            for (let i = 0; i < filteredQuotes.length; i++) {
+                const quote = filteredQuotes[i];
+                
+                // Add open price at the start of the hour (if available)
+                if (quote.open !== null && quote.open !== undefined) {
+                    const openDate = new Date(quote.date);
+                    // Set to start of hour (e.g., 9:30, 10:30, etc.)
+                    openDate.setMinutes(0);
+                    openDate.setSeconds(0);
+                    openDate.setMilliseconds(0);
+                    
+                    expandedData.push({
+                        date: openDate,
+                        close: quote.open, // Use open as the "close" price for this timestamp
+                        open: quote.open,
+                        high: quote.high,
+                        low: quote.low,
+                        volume: quote.volume
+                    });
+                }
+                
+                // Add close price at the end of the hour
+                if (quote.close !== null && quote.close !== undefined) {
+                    expandedData.push({
+                        date: quote.date,
+                        close: quote.close,
+                        open: quote.open,
+                        high: quote.high,
+                        low: quote.low,
+                        volume: quote.volume
+                    });
+                }
+            }
+            
+            return expandedData.length > 0 ? expandedData : filteredQuotes;
+        }
+        return null;
+    } catch (error) {
+        // Intraday data might not be available, fallback to daily
+        // This is expected for some stocks or outside market hours
+        return null;
+    }
 }
 
-// Trigger background refresh (fire-and-forget, safe for Node <18)
-function triggerBackgroundRefresh() {
-    const baseUrl = process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : `http://localhost:${process.env.PORT || 3000}`;
-    try {
-        const url = `${baseUrl}/api/cron/refresh-cache`;
-        if (typeof fetch === 'function') {
-            fetch(url, {
-                headers: { 'Authorization': `Bearer ${process.env.CRON_SECRET || ''}` }
-            }).catch(() => {});
-        } else {
-            const https = require('https');
-            const http = require('http');
-            const mod = url.startsWith('https') ? https : http;
-            const req = mod.get(url, { headers: { 'Authorization': `Bearer ${process.env.CRON_SECRET || ''}` } });
-            req.on('error', () => {});
-            req.end();
+// Generate mock chart data with hourly granularity
+function generateMockChartData() {
+    const managers = loadManagersFromConfig();
+    
+    // Mock data goes up to today (or a recent date)
+    const today = new Date();
+    const mockEndDate = new Date(today);
+    // For demo purposes, set to a future date (e.g., 2 weeks from now)
+    mockEndDate.setDate(mockEndDate.getDate() + 14);
+    
+    const firstTradingDay = new Date(2026, 0, 2); // Jan 2, 2026
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    // Generate month labels
+    const monthLabels = [];
+    const currentMonth = mockEndDate.getMonth();
+    const currentDay = mockEndDate.getDate();
+    for (let i = 0; i < currentMonth; i++) {
+        monthLabels.push(months[i]);
+    }
+    if (currentMonth >= 0) {
+        monthLabels.push(`${months[currentMonth]} ${currentDay}`);
+    }
+    
+    // Define unique performance patterns for each stock with realistic characteristics
+    const stockPatterns = [
+        // Daniel - NBIS: Strong start, then moderate growth with some volatility
+        { base: 0, trend: 0.15, volatility: 0.08, momentum: 0.02 },
+        // Sam - NVDA: High volatility tech stock with big swings
+        { base: 0, trend: 0.20, volatility: 0.15, momentum: 0.03 },
+        // Szklarek - WY: Steady consistent growth, low volatility
+        { base: 0, trend: 0.10, volatility: 0.04, momentum: 0.01 },
+        // Cale - NVO: Strong upward trend with moderate volatility
+        { base: 0, trend: 0.18, volatility: 0.06, momentum: 0.025 },
+        // Charlie - TSLA: High volatility, big moves, some negative periods
+        { base: 0, trend: 0.08, volatility: 0.12, momentum: -0.01 },
+        // Kruse - AMTM: Slow and steady, very low volatility
+        { base: 0, trend: 0.08, volatility: 0.03, momentum: 0.008 },
+        // Kyle - PLTR: Tech growth with corrections, high volatility
+        { base: 0, trend: 0.22, volatility: 0.10, momentum: 0.02 },
+        // Adam - JPM: Financial sector, moderate growth, moderate volatility
+        { base: 0, trend: 0.12, volatility: 0.05, momentum: 0.015 },
+        // Carson - AMZN: E-commerce giant, steady climb, low volatility
+        { base: 0, trend: 0.14, volatility: 0.05, momentum: 0.018 },
+        // Grant - WM: Waste management, stable, very low volatility
+        { base: 0, trend: 0.09, volatility: 0.03, momentum: 0.01 },
+        // Nick - PM: Tobacco, defensive play, low volatility
+        { base: 0, trend: 0.07, volatility: 0.03, momentum: 0.008 },
+        // Pierino - CRCL: Circular economy, growth potential, moderate volatility
+        { base: 0, trend: 0.16, volatility: 0.07, momentum: 0.02 }
+    ];
+    
+    // Generate daily data with open and close prices (2 points per trading day)
+    const generateDailyData = (pattern, startDate, endDate) => {
+        const data = [];
+        const timestamps = [];
+        
+        let currentDate = new Date(startDate);
+        let currentValue = pattern.base;
+        let dayCount = 0;
+        
+        // Market hours: 9:30 AM - 4:00 PM ET
+        const marketOpenHour = 9;
+        const marketOpenMinute = 30;
+        const marketCloseHour = 16;
+        
+        while (currentDate <= endDate) {
+            const dayOfWeek = currentDate.getDay();
+            
+            // Only include weekdays (Monday = 1, Friday = 5)
+            if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                // Calculate base value for this day with trend, momentum, and volatility
+                const daysSinceStart = dayCount;
+                const trendComponent = daysSinceStart * pattern.trend / 100;
+                const momentumComponent = daysSinceStart * pattern.momentum / 100;
+                const dailyVolatility = (Math.random() - 0.5) * pattern.volatility;
+                
+                const baseValue = pattern.base + trendComponent + momentumComponent + dailyVolatility;
+                
+                // Open price: base value with small random variation
+                const openVariation = (Math.random() - 0.5) * pattern.volatility * 0.2;
+                const openPrice = baseValue + openVariation;
+                
+                // Close price: open price with intraday movement (can be up or down)
+                const intradayMove = (Math.random() - 0.5) * pattern.volatility * 0.8; // Larger variation for close
+                const closePrice = openPrice + intradayMove;
+                
+                // Open price timestamp (9:30 AM)
+                const openTimestamp = new Date(currentDate);
+                openTimestamp.setHours(marketOpenHour, marketOpenMinute, 0, 0);
+                
+                // Close price timestamp (4:00 PM)
+                const closeTimestamp = new Date(currentDate);
+                closeTimestamp.setHours(marketCloseHour, 0, 0, 0);
+                
+                // Add open price
+                data.push(parseFloat(openPrice.toFixed(2)));
+                timestamps.push(openTimestamp.getTime());
+                
+                // Add close price
+                data.push(parseFloat(closePrice.toFixed(2)));
+                timestamps.push(closeTimestamp.getTime());
+                
+                dayCount++;
+            }
+            
+            // Move to next day
+            currentDate.setDate(currentDate.getDate() + 1);
         }
-    } catch (e) {}
+        
+        return { data, timestamps };
+    };
+    
+    // Generate mock performance data for each stock
+    const stockData = managers.map((manager, index) => {
+        const symbol = manager.stockSymbol;
+        const pattern = stockPatterns[index] || stockPatterns[0];
+        
+        const { data, timestamps } = generateDailyData(pattern, firstTradingDay, mockEndDate);
+        
+        return {
+            name: manager.name,
+            symbol: symbol,
+            data: data,
+            timestamps: timestamps
+        };
+    });
+    
+    return {
+        months: monthLabels,
+        data: stockData
+    };
+}
+
+// Generate mock current stock data for leaderboard
+// This should match the latest values from the mock chart data
+function generateMockCurrentData() {
+    const managers = loadManagersFromConfig();
+    const today = new Date();
+    
+    // Calculate approximate YTD values based on the chart data patterns
+    // These are derived from the stock patterns and current date
+    // For mock data, simulate being a few weeks into 2026
+    const yearStart = new Date(2026, 0, 1);
+    const actualDaysSinceStart = Math.floor((today - yearStart) / (1000 * 60 * 60 * 24));
+    // If we're before 2026, use a simulated number of days (e.g., 14 days into 2026)
+    const daysSinceStart = actualDaysSinceStart < 0 ? 14 : Math.max(0, actualDaysSinceStart);
+    
+    // Stock patterns (same as in generateMockChartData)
+    const stockPatterns = [
+        { base: 0, trend: 0.15, volatility: 0.08, momentum: 0.02 },  // Daniel - NBIS
+        { base: 0, trend: 0.20, volatility: 0.15, momentum: 0.03 },  // Sam - NVDA
+        { base: 0, trend: 0.10, volatility: 0.04, momentum: 0.01 }, // Szklarek - WY
+        { base: 0, trend: 0.18, volatility: 0.06, momentum: 0.025 }, // Cale - NVO
+        { base: 0, trend: 0.08, volatility: 0.12, momentum: -0.01 }, // Charlie - TSLA
+        { base: 0, trend: 0.08, volatility: 0.03, momentum: 0.008 }, // Kruse - AMTM
+        { base: 0, trend: 0.22, volatility: 0.10, momentum: 0.02 },  // Kyle - PLTR
+        { base: 0, trend: 0.12, volatility: 0.05, momentum: 0.015 }, // Adam - JPM
+        { base: 0, trend: 0.14, volatility: 0.05, momentum: 0.018 }, // Carson - AMZN
+        { base: 0, trend: 0.09, volatility: 0.03, momentum: 0.01 },  // Grant - WM
+        { base: 0, trend: 0.07, volatility: 0.03, momentum: 0.008 }, // Nick - PM
+        { base: 0, trend: 0.16, volatility: 0.07, momentum: 0.02 }   // Pierino - CRCL
+    ];
+    
+    // Generate mock data for each manager
+    const results = managers.map((manager, index) => {
+        const symbol = manager.stockSymbol;
+        const pattern = stockPatterns[index] || stockPatterns[0];
+        
+        // Calculate YTD percentage based on pattern
+        const trendComponent = daysSinceStart * pattern.trend / 100;
+        const momentumComponent = daysSinceStart * pattern.momentum / 100;
+        const dailyVolatility = (Math.random() - 0.5) * pattern.volatility;
+        const ytdPercent = pattern.base + trendComponent + momentumComponent + dailyVolatility;
+        
+        // Calculate mock prices (using a base price and YTD change)
+        const basePrice = 100; // Base price for calculation
+        const currentPrice = basePrice * (1 + ytdPercent / 100);
+        
+        // Calculate 1d change (small variation from YTD, typically close to YTD early in year)
+        const change1d = ytdPercent + (Math.random() - 0.5) * 0.3;
+        
+        // Calculate 1m and 3m (only if enough time has passed)
+        let change1m = null;
+        let change3m = null;
+        
+        if (daysSinceStart >= 30) {
+            // Approximate 1m as slightly less than YTD (since we're early in the year)
+            const oneMonthTrend = Math.max(0, daysSinceStart - 30) * pattern.trend / 100;
+            const oneMonthMomentum = Math.max(0, daysSinceStart - 30) * pattern.momentum / 100;
+            change1m = pattern.base + oneMonthTrend + oneMonthMomentum + (Math.random() - 0.5) * pattern.volatility;
+        }
+        
+        if (daysSinceStart >= 90) {
+            // Approximate 3m as proportionally less than YTD
+            const threeMonthTrend = Math.max(0, daysSinceStart - 90) * pattern.trend / 100;
+            const threeMonthMomentum = Math.max(0, daysSinceStart - 90) * pattern.momentum / 100;
+            change3m = pattern.base + threeMonthTrend + threeMonthMomentum + (Math.random() - 0.5) * pattern.volatility;
+        }
+        
+        return {
+            name: manager.name,
+            symbol: symbol,
+            currentPrice: parseFloat(currentPrice.toFixed(2)),
+            changePercent: parseFloat(ytdPercent.toFixed(2)),
+            change1d: parseFloat(change1d.toFixed(2)),
+            change1m: change1m !== null ? parseFloat(change1m.toFixed(2)) : null,
+            change3m: change3m !== null ? parseFloat(change3m.toFixed(2)) : null,
+            analysis: manager.analysis || null // Include analysis from managers.json
+        };
+    });
+    
+    // Sort by YTD percentage (descending)
+    results.sort((a, b) => {
+        const aPercent = a.changePercent || -Infinity;
+        const bPercent = b.changePercent || -Infinity;
+        return bPercent - aPercent;
+    });
+    
+    return results;
 }
 
 module.exports = {
-    CACHE_KEYS,
-    getCachedData,
-    setCachedData,
-    isStale,
-    markRefreshed,
-    acquireRefreshLock,
-    fetchWithTimeout,
-    fetchQuotesBatched,
-    isMarketOpen,
-    isDuringMarketHours,
-    isTradingDay,
     loadManagersFromConfig,
     getHistoricalPrice,
     getBaselinePrices,
     getYTDDividends,
-    ytdInterval,
-    triggerBackgroundRefresh,
-    yahooFinance
+    getIntradayData,
+    generateMockChartData,
+    generateMockCurrentData,
+    isMarketOpen,
+    isDuringMarketHours,
+    isTradingDay,
+    shouldUseCache,
+    shouldUseCacheSync,
+    getCachedStockData,
+    setCachedStockData,
+    getLastUpdate,
+    CACHE_KEYS,
+    stockDataCache
 };
+
