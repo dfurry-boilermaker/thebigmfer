@@ -498,6 +498,11 @@ section h2 {
         margin-bottom: 20px;
     }
 
+    .chart-section-zoomed .section-heading h2 {
+        font-size: 0.6875rem;
+        margin-bottom: 6px;
+    }
+
     .main-content {
         gap: 32px;
     }
