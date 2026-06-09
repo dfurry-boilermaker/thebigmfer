@@ -2174,11 +2174,6 @@ function renderStats(chartData, currentData) {
         });
     }
 
-    const volatilityValues = Object.values(volatilityBySymbol).filter(v => Number.isFinite(v)).sort((a, b) => a - b);
-    const medianVolatility = volatilityValues.length > 0
-        ? volatilityValues[Math.floor(volatilityValues.length / 2)]
-        : null;
-
     const summaryHtml = `
         <div class="stats-summary">
             <div class="summary-card featured">
@@ -2230,11 +2225,10 @@ function renderStats(chartData, currentData) {
         }
 
         let vol = '-';
-        let volLabel = 'No trend';
+        let volLabel = 'Volatility';
         const volValue = volatilityBySymbol[stock.symbol];
         if (Number.isFinite(volValue)) {
             vol = `${volValue.toFixed(1)} pts`;
-            volLabel = medianVolatility !== null && volValue > medianVolatility ? 'Choppier' : 'Steadier';
         }
 
         return `
