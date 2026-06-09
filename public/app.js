@@ -1441,17 +1441,17 @@ function renderChart(chartData, currentData) {
                         display: true,
                         text: 'YTD Performance',
                         position: 'top',
-                        align: 'center',
+                        align: 'start',
                         fullSize: true,
-                        color: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.8)' : '#666666',
+                        color: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.5)' : '#999999',
                         font: {
-                            size: isMobile ? 10 : 12,
+                            size: isMobile ? 10 : 11,
                             weight: '500',
-                            family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", sans-serif'
+                            family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
                         },
                         padding: {
                             top: 0,
-                            bottom: isMobile ? 8 : 12
+                            bottom: isMobile ? 4 : 8
                         }
                     },
                     legend: {
@@ -1459,11 +1459,11 @@ function renderChart(chartData, currentData) {
                     },
                     tooltip: {
                         enabled: false
-                    },
-                    interaction: {
-                        intersect: false,
-                        mode: 'nearest'
                     }
+                },
+                interaction: {
+                    intersect: false,
+                    mode: 'nearest'
                 },
                 scales: {
                     y: {
@@ -1474,22 +1474,19 @@ function renderChart(chartData, currentData) {
                         ticks: {
                             callback: function(value) {
                                 const sign = value > 0 ? '+' : '';
-                                return sign + value.toFixed(1) + '%';
+                                return sign + value.toFixed(0) + '%';
                             },
-                            color: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.6)' : '#666666',
+                            color: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.4)' : '#aaaaaa',
                             font: {
-                                size: isMobile ? 10 : 12,
-                                weight: '500'
+                                size: isMobile ? 9 : 11,
+                                weight: '400'
                             },
                             padding: isMobile ? 4 : 8
                         },
                         grid: {
-                            color: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
-                            borderColor: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.12)' : '#d0d0d0',
+                            color: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
                             lineWidth: 1,
-                            drawBorder: true,
-                            zeroLineColor: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.2)',
-                            zeroLineWidth: 2
+                            drawBorder: false
                         }
                     },
                     x: {
@@ -1502,108 +1499,41 @@ function renderChart(chartData, currentData) {
                         },
                         display: true,
                         grid: {
-                            display: true,
-                            color: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.05)',
-                            drawOnChartArea: true
+                            display: false
                         },
                         ticks: {
                             display: true,
-                            maxTicksLimit: isMobile ? 5 : 8,
+                            maxTicksLimit: isMobile ? 4 : 6,
                             autoSkip: true,
-                            autoSkipPadding: isMobile ? 5 : 10,
-                            color: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.6)' : '#666666',
+                            autoSkipPadding: isMobile ? 15 : 20,
+                            color: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.4)' : '#aaaaaa',
                             font: {
-                                size: isMobile ? 10 : 12,
-                                weight: '500'
+                                size: isMobile ? 9 : 11,
+                                weight: '400'
                             },
-                            maxRotation: isMobile ? 45 : 0,
+                            maxRotation: 0,
                             minRotation: 0,
-                            padding: isMobile ? 8 : 12,
-                            // Map trading day indices to date labels
+                            padding: isMobile ? 6 : 10,
                             callback: function(value, index, ticks) {
-                                if (value === null || value === undefined) {
-                                    return '';
-                                }
+                                if (value === null || value === undefined) return '';
                                 const tradingDayIndex = Math.round(value);
-                                let label = indexToDateLabel.get(tradingDayIndex);
-                                
-                                // On mobile only, always show the last tick (current date) even if it's not in the normal tick sequence
-                                if (isMobile && index === ticks.length - 1) {
-                                    // Find the last available label (max index) to ensure current date is shown
-                                    let maxIdx = -1;
-                                    let lastLabel = '';
-                                    indexToDateLabel.forEach((lbl, idx) => {
-                                        if (idx > maxIdx) {
-                                            maxIdx = idx;
-                                            lastLabel = lbl;
-                                        }
-                                    });
-                                    // If the current tick is not the last date, return the last date instead
-                                    if (tradingDayIndex < maxIdx && lastLabel) {
-                                        return lastLabel;
-                                    }
-                                }
-                                
-                                return label || '';
-                            },
-                            // Custom function to ensure last tick is included on mobile only
-                            afterBuildTicks: function(scale) {
-                                // Only apply mobile-specific fixes on mobile
-                                if (isMobile && scale.ticks && scale.ticks.length > 0) {
-                                    // Get the max index
-                                    const maxIdx = Math.max(...Array.from(indexToDateLabel.keys()));
-                                    const lastTick = scale.ticks[scale.ticks.length - 1];
-                                    
-                                    // Always ensure the last tick is at max index
-                                    if (lastTick) {
-                                        const lastTickValue = Math.round(lastTick.value);
-                                        if (lastTickValue < maxIdx) {
-                                            // Replace the last tick with one at max index
-                                            const lastLabel = indexToDateLabel.get(maxIdx);
-                                            if (lastLabel) {
-                                                lastTick.value = maxIdx;
-                                                lastTick.label = lastLabel;
-                                            }
-                                        } else if (lastTickValue === maxIdx) {
-                                            // Make sure the label is correct
-                                            const lastLabel = indexToDateLabel.get(maxIdx);
-                                            if (lastLabel) {
-                                                lastTick.label = lastLabel;
-                                            }
-                                        }
-                                    } else {
-                                        // If no ticks, add one at max index
-                                        const lastLabel = indexToDateLabel.get(maxIdx);
-                                        if (lastLabel) {
-                                            scale.ticks.push({
-                                                value: maxIdx,
-                                                label: lastLabel
-                                            });
-                                        }
-                                    }
-                                    
-                                    // Force the last tick to be visible by ensuring it's within the scale range
-                                    if (lastTick && lastTick.value > scale.max) {
-                                        scale.max = lastTick.value + 0.5;
-                                    }
-                                }
+                                return indexToDateLabel.get(tradingDayIndex) || '';
                             }
                         }
                     }
                 },
                 layout: {
                     padding: {
-                        // Right padding so right-aligned labels are visible, but keep it tighter on mobile
-                        right: isMobile ? 20 : 20,
-                        left: isMobile ? 0 : 20,
-                        top: isMobile ? 10 : 20,
-                        bottom: isMobile ? 10 : 20
+                        right: isMobile ? 8 : 16,
+                        left: isMobile ? 0 : 8,
+                        top: isMobile ? 8 : 16,
+                        bottom: isMobile ? 4 : 8
                     }
                 },
                 elements: {
                     point: {
-                        hoverRadius: 8,
-                        hoverBorderWidth: 3
+                        hoverRadius: 0,
+                        hoverBorderWidth: 0
                     }
                 }
             },
@@ -1612,225 +1542,120 @@ function renderChart(chartData, currentData) {
                 afterDatasetsDraw: (chart) => {
                     const ctx = chart.ctx;
                     const chartArea = chart.chartArea;
-                    if (!chartArea) {
-                        console.warn('Chart area not available');
-                        return;
-                    }
-                    
-                    console.log('=== LABEL RENDERING DEBUG ===');
-                    console.log('Chart area:', chartArea);
-                    console.log('Datasets count:', chart.data.datasets.length);
-                    
+                    if (!chartArea) return;
+
                     const isMobile = window.innerWidth < 768;
-                    console.log('Is mobile:', isMobile);
-                    const config = {
-                        mobile: {
-                            fontSize: '600 8px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-                            textHeight: 9,
-                            labelOffsetX: 4,
-                            padding: 35,
-                            topMargin: 5,
-                            bottomMargin: 5,
-                            topBound: 20,
-                            bottomBound: 20,
-                            labelTopMargin: 5,
-                            labelBottomMargin: 5,
-                            lineWidth: 1.5,
-                            rectPadding: 3,
-                            rectHeightOffset: 4
-                        },
-                        desktop: {
-                            fontSize: '600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-                            textHeight: 18,
-                            labelOffsetX: 14,
-                            padding: 20,
-                            topMargin: 10,
-                            bottomMargin: 10,
-                            topBound: 20,
-                            bottomBound: 20,
-                            labelTopMargin: 15,
-                            labelBottomMargin: 15,
-                            lineWidth: 2,
-                            rectPadding: 8,
-                            rectHeightOffset: 4
-                        }
-                    };
-                    
-                    const cfg = isMobile ? config.mobile : config.desktop;
-                    const labelData = [];
-                    ctx.font = cfg.fontSize;
-                    ctx.textAlign = 'left';
+                    const fontSize = isMobile
+                        ? '500 7.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+                        : '500 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                    const lineHeight = isMobile ? 11 : 16;
+                    const padding = isMobile ? 2 : 4;
+                    const labelTheme = document.documentElement.getAttribute('data-theme') || 'light';
+
+                    ctx.font = fontSize;
                     ctx.textBaseline = 'middle';
-                    
-                    chart.data.datasets.forEach((dataset, datasetIndex) => {
-                        const meta = chart.getDatasetMeta(datasetIndex);
-                        if (!meta || meta.hidden || !meta.data || meta.data.length === 0) {
-                            console.log(`Dataset ${datasetIndex} skipped: hidden=${meta?.hidden}, data length=${meta?.data?.length}`);
-                            return;
-                        }
-                        
+
+                    const labelData = [];
+
+                    chart.data.datasets.forEach((dataset, i) => {
+                        const meta = chart.getDatasetMeta(i);
+                        if (!meta || meta.hidden || !meta.data || meta.data.length === 0) return;
+
                         const lastPoint = meta.data[meta.data.length - 1];
-                        const value = dataset.data[dataset.data.length - 1];
-                        
-                        console.log(`Dataset ${datasetIndex} (${dataset.label}):`, {
-                            lastPoint: lastPoint ? { x: lastPoint.x, y: lastPoint.y } : 'null',
-                            value: value,
-                            dataLength: dataset.data.length
-                        });
-                        
-                        if (value === null || lastPoint === undefined || lastPoint.x === undefined || lastPoint.y === undefined) {
-                            console.log(`Dataset ${datasetIndex} skipped: invalid point or value`);
-                            return;
-                        }
-                        
-                        const x = lastPoint.x;
-                        // Use the Y value from the last point (which should be the leaderboard YTD)
-                        // But prefer leaderboard YTD if available to ensure exact match
-                        const y = lastPoint.y;
-                        
-                        // Get YTD percentage from current stock data (same source as leaderboard)
+                        if (!lastPoint || lastPoint.x === undefined || lastPoint.y === undefined) return;
+
                         const labelParts = dataset.label.split(' (');
                         const name = labelParts[0] || '';
                         const symbol = labelParts[1] ? labelParts[1].replace(')', '') : '';
-                        
-                        // Always use YTD from leaderboard to ensure exact match
-                        const ytdPercent = ytdMap[symbol] !== undefined ? ytdMap[symbol] : (y !== null && y !== undefined ? y : null);
-                        const ytdFormatted = ytdPercent !== null && ytdPercent !== undefined 
+                        const ytdPercent = ytdMap[symbol];
+                        const ytdFormatted = ytdPercent !== null && ytdPercent !== undefined
                             ? `${ytdPercent >= 0 ? '+' : ''}${ytdPercent.toFixed(1)}%`
-                            : 'N/A';
-                        
-                        // Format: "Name • SYMBOL • +12.5%" for both desktop and mobile
-                        const labelText = `${name} • ${symbol} • ${ytdFormatted}`;
-                        
-                        ctx.font = cfg.fontSize;
-                        const textMetrics = ctx.measureText(labelText);
-                        const maxWidth = textMetrics.width;
-                        
-                        console.log(`Adding label for dataset ${datasetIndex}:`, labelText, 'at point:', { x, y });
-                        
+                            : '';
+
+                        const labelText = isMobile
+                            ? `${name} ${ytdFormatted}`
+                            : `${name} • ${symbol} • ${ytdFormatted}`;
+
+                        const textWidth = ctx.measureText(labelText).width;
+
                         labelData.push({
-                            datasetIndex,
-                            x: x + cfg.labelOffsetX,
-                            y: y,
-                            textWidth: maxWidth,
-                            textHeight: cfg.textHeight,
+                            y: lastPoint.y,
                             labelText,
-                            color: dataset.borderColor,
-                            originalY: y,
-                            originalX: x,
-                            pointX: x,
-                            pointY: y,
-                            ytdValue: ytdPercent !== null && ytdPercent !== undefined ? ytdPercent : (value !== null && value !== undefined ? value : 0)
+                            textWidth,
+                            color: dataset.borderColor
                         });
                     });
-                    
-                    console.log(`Collected ${labelData.length} labels`);
-                    
-                    // We want labels to stay attached to their own line endpoints,
-                    // with only minimal adjustment to avoid overlaps and keep them on-screen.
-                    const topBound = chartArea.top + cfg.labelTopMargin + cfg.textHeight / 2;
-                    const bottomBound = chartArea.bottom - cfg.labelBottomMargin - cfg.textHeight / 2;
-                    // Minimum vertical spacing between label centers so boxes don't overlap
-                    const minSpacing = (cfg.textHeight || 12) + (isMobile ? 4 : 8);
-                    
-                    // Sort by the original Y position so we adjust from top to bottom
+
+                    if (labelData.length === 0) return;
+
+                    // Bidirectional collision resolution
+                    const minSpacing = lineHeight + (isMobile ? 1 : 2);
+                    const topBound = chartArea.top + lineHeight / 2 + 2;
+                    const bottomBound = chartArea.bottom - lineHeight / 2 - 2;
+
                     labelData.sort((a, b) => a.y - b.y);
-                    
-                    let lastY = null;
-                    labelData.forEach((label) => {
-                        // Start from the line's endpoint Y, clamped to chart bounds
-                        let y = Math.min(Math.max(label.y, topBound), bottomBound);
-                        
-                        // If this label is too close to the previous one, nudge it down a bit
-                        if (lastY !== null && y - lastY < minSpacing) {
-                            y = lastY + minSpacing;
-                            if (y > bottomBound) {
-                                y = bottomBound;
-                            }
+
+                    // First pass: push down
+                    for (let i = 1; i < labelData.length; i++) {
+                        const prev = labelData[i - 1];
+                        const curr = labelData[i];
+                        if (curr.y - prev.y < minSpacing) {
+                            curr.y = prev.y + minSpacing;
                         }
-                        
-                        label.y = y;
-                        lastY = y;
-                        
-                        // Keep X to the right of the last point, but ensure it stays inside the chart
-                        const labelRightMargin = 10;
-                        const maxX = chartArea.right - labelRightMargin;
-                        let x = label.x;
-                        const labelWidth = label.textWidth + cfg.rectPadding * 2;
-                        if (x + labelWidth > maxX) {
-                            x = maxX - labelWidth;
+                    }
+
+                    // If we overflowed bottom, pull everything up
+                    const overflow = labelData[labelData.length - 1].y - bottomBound;
+                    if (overflow > 0) {
+                        for (let i = 0; i < labelData.length; i++) {
+                            labelData[i].y -= overflow;
                         }
-                        label.x = x;
-                    });
-                    
-                    let drawnCount = 0;
+                    }
+
+                    // Second pass: push back down if we went above top
+                    for (let i = 0; i < labelData.length; i++) {
+                        if (labelData[i].y < topBound) {
+                            labelData[i].y = topBound;
+                        }
+                        if (i > 0 && labelData[i].y - labelData[i - 1].y < minSpacing) {
+                            labelData[i].y = labelData[i - 1].y + minSpacing;
+                        }
+                    }
+
+                    // Draw labels right-aligned to chart edge
+                    const rightEdge = chartArea.right - 4;
+
                     labelData.forEach((label) => {
-                        // Always draw labels - don't filter by bounds
+                        const rectWidth = label.textWidth + padding * 2;
+                        const rectX = rightEdge - rectWidth;
+                        const rectY = label.y - lineHeight / 2;
+                        const rectHeight = lineHeight;
+
                         ctx.save();
-                        ctx.font = cfg.fontSize;
+                        ctx.font = fontSize;
                         ctx.textAlign = 'left';
                         ctx.textBaseline = 'middle';
-                        
-                        // All labels should share the same right edge inside the chart
-                        const rightMargin = 10; // space from right chart border
-                        const finalRightEdge = chartArea.right - rightMargin;
-                        const rectWidth = label.textWidth + cfg.rectPadding * 2;
-                        const rectX = finalRightEdge - rectWidth;
-                        const finalLabelX = rectX + cfg.rectPadding;
-                        
-                        ctx.textAlign = 'left';
-                        
-                        // Use the adjusted Y position (already clamped during collision detection)
-                        // Final safety check to ensure label is visible
-                        const topBound = chartArea.top + label.textHeight / 2 + cfg.labelTopMargin;
-                        const bottomBound = chartArea.bottom - label.textHeight / 2 - cfg.labelBottomMargin;
-                        const finalLabelY = Math.max(topBound, Math.min(bottomBound, label.y));
-                        
-                        // Update label Y if it was clamped for consistency
-                        label.y = finalLabelY;
-                        
-                        console.log(`Drawing label ${label.datasetIndex} (${label.labelText}) at:`, {
-                            x: finalLabelX,
-                            y: finalLabelY,
-                            chartArea: chartArea
-                        });
-                        
-                        // Draw background rectangle with rounded corners (right-aligned)
-                        const rectY = finalLabelY - label.textHeight / 2 - 2;
-                        const rectHeight = label.textHeight + cfg.rectHeightOffset;
-                        const borderRadius = isMobile ? 4 : 6;
-                        
-                        // Get current theme for label styling
-                        const labelTheme = document.documentElement.getAttribute('data-theme') || 'light';
-                        
-                        // Draw rounded rectangle background - theme-aware
-                        ctx.fillStyle = labelTheme === 'dark' ? '#000000' : 'rgba(255, 255, 255, 0.95)';
+
+                        // Background pill
+                        ctx.fillStyle = labelTheme === 'dark'
+                            ? 'rgba(15, 15, 15, 0.85)'
+                            : 'rgba(255, 255, 255, 0.88)';
                         ctx.beginPath();
-                        ctx.roundRect(rectX, rectY, rectWidth, rectHeight, borderRadius);
+                        ctx.roundRect(rectX, rectY, rectWidth, rectHeight, isMobile ? 3 : 4);
                         ctx.fill();
-                        
-                        // Draw border
-                        ctx.strokeStyle = label.color;
-                        ctx.lineWidth = cfg.lineWidth;
-                        ctx.stroke();
-                        
-                        // Draw label text with better styling - theme-aware
-                        ctx.fillStyle = labelTheme === 'dark' ? '#ffffff' : '#1a1a1a';
-                        ctx.shadowColor = labelTheme === 'dark' ? 'rgba(0, 0, 0, 0.3)' : 'rgba(0, 0, 0, 0.05)';
-                        ctx.shadowBlur = 1;
-                        ctx.shadowOffsetX = 0;
-                        ctx.shadowOffsetY = 0.5;
-                        
-                        // Draw single line label (same format for desktop and mobile)
-                        ctx.fillText(label.labelText, finalLabelX, finalLabelY);
-                        ctx.shadowBlur = 0; // Reset shadow
+
+                        // Left color accent bar
+                        ctx.fillStyle = label.color;
+                        ctx.beginPath();
+                        ctx.roundRect(rectX, rectY, isMobile ? 2 : 3, rectHeight, [isMobile ? 3 : 4, 0, 0, isMobile ? 3 : 4]);
+                        ctx.fill();
+
+                        // Text
+                        ctx.fillStyle = labelTheme === 'dark' ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.8)';
+                        ctx.fillText(label.labelText, rectX + padding + (isMobile ? 3 : 5), label.y);
+
                         ctx.restore();
-                        
-                        drawnCount++;
                     });
-                    
-                    console.log(`Drew ${drawnCount} labels out of ${labelData.length} collected`);
-                    console.log('=== END LABEL DEBUG ===');
                 }
             }]
         });

@@ -243,7 +243,7 @@ section h2 {
 
 .chart-container {
     position: relative;
-    height: 600px !important;
+    height: 600px;
     min-height: 600px;
     width: 100%;
     max-width: 100%;
@@ -267,25 +267,34 @@ section h2 {
         min-height: 400px;
         overflow: visible;
     }
-    
+
     .chart-section {
         padding: 0;
         overflow: visible;
     }
-    
+
     .chart-section h2 {
         font-size: 1.25rem;
         margin-bottom: 20px;
+    }
+
+    .main-content {
+        gap: 32px;
     }
 }
 
 @media (max-width: 480px) {
     .chart-container {
-        height: 400px;
+        height: 350px;
+        min-height: 350px;
     }
-    
+
     .chart-section {
         padding: 0;
+    }
+
+    .main-content {
+        gap: 24px;
     }
 }
 
@@ -580,11 +589,15 @@ section h2 {
 
 @media (max-width: 480px) {
     .leaderboard-item {
-        grid-template-columns: 20px auto 1fr;
+        grid-template-columns: 20px 1fr;
         grid-template-rows: auto auto;
         gap: 4px;
         padding: 10px 8px;
         min-height: 50px;
+    }
+
+    .price-percent-combined {
+        display: none;
     }
 
     .analysis-text {
@@ -595,13 +608,6 @@ section h2 {
 
     .analysis-content.expanded {
         margin-top: 8px;
-    }
-
-    .price-percent-combined {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 0;
     }
 
     .current-price {
@@ -711,11 +717,11 @@ section h2 {
 
 @media (max-width: 480px) {
     .mobile-only {
-        display: none;
+        display: flex;
     }
 
     .desktop-only {
-        display: flex;
+        display: none;
     }
 }
 
@@ -932,17 +938,6 @@ section h2 {
     section {
         padding: 0;
     }
-    
-    .chart-container {
-        height: 350px;
-        min-height: 350px;
-        overflow: visible;
-    }
-    
-    .chart-section {
-        padding: 0;
-        overflow: visible;
-    }
 
     .leaderboard-section {
         padding: 0;
@@ -966,7 +961,7 @@ section h2 {
     }
 
     .leaderboard-item {
-        grid-template-columns: 20px auto 1fr;
+        grid-template-columns: 20px 1fr;
         gap: 4px;
         padding: 10px 8px;
     }
@@ -980,8 +975,7 @@ section h2 {
         flex-direction: row;
         align-items: center;
         gap: 4px;
-        flex-wrap: nowrap;
-        white-space: nowrap;
+        flex-wrap: wrap;
     }
 
     .manager-name {
@@ -997,14 +991,13 @@ section h2 {
         font-size: 0.6875rem;
     }
 
-    .price-percent-combined {
-        display: flex;
-        align-items: flex-end;
-        gap: 0;
+    .manager-info .time-periods {
+        width: 100%;
+        gap: 8px;
     }
 
-    .price-percent-combined .time-periods {
-        gap: 8px;
+    .price-percent-combined {
+        display: none;
     }
 
     .time-period {
