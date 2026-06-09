@@ -556,6 +556,7 @@ async function fetchLeaderboardInBackground() {
             
             // Update leaderboard display with fresh data
             managerAnalyses = extractAnalysesFromLeaderboardData(data);
+            window.lastLeaderboardData = data;
             renderLeaderboard(data);
             
             console.log('Background refresh: leaderboard data updated');
@@ -563,6 +564,38 @@ async function fetchLeaderboardInBackground() {
     } catch (error) {
         console.log('Background refresh failed (non-critical):', error.message);
     }
+}
+
+function getBenchmarkYtd(symbol = 'SPY') {
+    const indexCache = localStorage.getItem('stock_competition_indexes');
+    if (!indexCache) return null;
+
+    try {
+        const indexes = JSON.parse(indexCache);
+        const benchmark = indexes.find(index => index.symbol === symbol);
+        return benchmark ? benchmark.changePercent : null;
+    } catch (error) {
+        return null;
+    }
+}
+
+function getVolatilityBySymbol(chartData) {
+    const volatilityBySymbol = {};
+    if (!chartData || !chartData.data) return volatilityBySymbol;
+
+    chartData.data.forEach(stockChart => {
+        if (stockChart && stockChart.symbol && stockChart.data && stockChart.data.length > 5) {
+            const returns = [];
+            for (let i = 1; i < stockChart.data.length; i++) {
+                returns.push(stockChart.data[i] - stockChart.data[i - 1]);
+            }
+            const retAvg = returns.reduce((a, b) => a + b, 0) / returns.length;
+            const retVar = returns.reduce((s, r) => s + Math.pow(r - retAvg, 2), 0) / returns.length;
+            volatilityBySymbol[stockChart.symbol] = Math.sqrt(retVar);
+        }
+    });
+
+    return volatilityBySymbol;
 }
 
 function renderLeaderboard(data) {
@@ -578,6 +611,15 @@ function renderLeaderboard(data) {
     
     console.log('Rendering leaderboard with', data.length, 'items');
     console.log('Manager analyses available:', Object.keys(managerAnalyses).length);
+
+    const validYtdValues = data
+        .filter(item => item.changePercent !== null && item.changePercent !== undefined)
+        .map(item => item.changePercent);
+    const fieldAverage = validYtdValues.length > 0
+        ? validYtdValues.reduce((a, b) => a + b, 0) / validYtdValues.length
+        : null;
+    const spyYtd = getBenchmarkYtd('SPY');
+    const volatilityBySymbol = getVolatilityBySymbol(window.lastChartData);
     
     leaderboard.innerHTML = data.map((item, index) => {
         const rank = index + 1;
@@ -587,6 +629,12 @@ function renderLeaderboard(data) {
         const change1mClass = item.change1m !== null ? (item.change1m >= 0 ? 'positive' : 'negative') : '';
         const change3mClass = item.change3m !== null ? (item.change3m >= 0 ? 'positive' : 'negative') : '';
         const changeYTDClass = item.changePercent !== null ? (item.changePercent >= 0 ? 'positive' : 'negative') : '';
+        const vsAvg = fieldAverage !== null && item.changePercent !== null ? item.changePercent - fieldAverage : null;
+        const vsAvgClass = vsAvg !== null ? (vsAvg >= 0 ? 'positive' : 'negative') : 'no-data';
+        const vsSpy = spyYtd !== null && item.changePercent !== null ? item.changePercent - spyYtd : null;
+        const vsSpyClass = vsSpy !== null ? (vsSpy >= 0 ? 'positive' : 'negative') : 'no-data';
+        const volValue = volatilityBySymbol[item.symbol];
+        const volText = Number.isFinite(volValue) ? `${volValue.toFixed(1)} pts` : '-';
 
         // Get analysis for this manager
         // First check if analysis is directly on the item (from API), otherwise check managerAnalyses
@@ -652,6 +700,20 @@ function renderLeaderboard(data) {
                         <span class="time-period">
                             <span class="period-label">YTD</span>
                             <span class="period-value ${item.changePercent === null ? 'no-data' : changeYTDClass}">${item.changePercent !== null ? getChangeSign(item.changePercent) + formatPercent(item.changePercent) + '%' : '-'}</span>
+                        </span>
+                    </div>
+                    <div class="leaderboard-context-metrics">
+                        <span class="leaderboard-context-metric">
+                            <span class="context-label">vs Avg</span>
+                            <span class="context-value ${vsAvgClass}">${vsAvg !== null ? formatSignedPercentValue(vsAvg) : '-'}</span>
+                        </span>
+                        <span class="leaderboard-context-metric">
+                            <span class="context-label">vs SPY</span>
+                            <span class="context-value ${vsSpyClass}">${vsSpy !== null ? formatSignedPercentValue(vsSpy) : '-'}</span>
+                        </span>
+                        <span class="leaderboard-context-metric">
+                            <span class="context-label">Volatility</span>
+                            <span class="context-value ${Number.isFinite(volValue) ? '' : 'no-data'}">${volText}</span>
                         </span>
                     </div>
                 </div>
@@ -748,6 +810,7 @@ async function loadChart() {
             window.lastLeaderboardData = cachedCurrentData;
             renderChart(cachedChartData, cachedCurrentData);
             renderZoomedChart(cachedChartData, cachedCurrentData);
+            renderLeaderboard(cachedCurrentData);
             renderStats(cachedChartData, cachedCurrentData);
 
             // Fetch fresh data in background (don't wait for it)
@@ -769,6 +832,7 @@ async function loadChart() {
             window.lastLeaderboardData = cachedCurrentData;
             renderChart(cachedChartData, cachedCurrentData);
             renderZoomedChart(cachedChartData, cachedCurrentData);
+            renderLeaderboard(cachedCurrentData);
             renderStats(cachedChartData, cachedCurrentData);
         }
     }
@@ -821,6 +885,7 @@ async function fetchChartData() {
     // Render the charts
     renderChart(chartData, currentData);
     renderZoomedChart(chartData, currentData);
+    renderLeaderboard(currentData);
     renderStats(chartData, currentData);
 }
 
@@ -846,6 +911,7 @@ async function fetchChartInBackground() {
                 window.lastLeaderboardData = currentData;
                 renderChart(chartData, currentData);
                 renderZoomedChart(chartData, currentData);
+                renderLeaderboard(currentData);
                 renderStats(chartData, currentData);
                 
                 console.log('Background refresh: chart and leaderboard data updated');
@@ -2148,32 +2214,6 @@ function renderStats(chartData, currentData) {
     const laggard = validStocks[validStocks.length - 1];
     const fieldSpread = leader.changePercent - laggard.changePercent;
 
-    // Get SPY benchmark (if available from indexes)
-    let spyYtd = null;
-    const indexCache = localStorage.getItem('stock_competition_indexes');
-    if (indexCache) {
-        try {
-            const indexes = JSON.parse(indexCache);
-            const spy = indexes.find(i => i.symbol === 'SPY');
-            if (spy) spyYtd = spy.changePercent;
-        } catch (e) {}
-    }
-
-    const volatilityBySymbol = {};
-    if (chartData && chartData.data) {
-        chartData.data.forEach(stockChart => {
-            if (stockChart && stockChart.symbol && stockChart.data && stockChart.data.length > 5) {
-                const returns = [];
-                for (let i = 1; i < stockChart.data.length; i++) {
-                    returns.push(stockChart.data[i] - stockChart.data[i - 1]);
-                }
-                const retAvg = returns.reduce((a, b) => a + b, 0) / returns.length;
-                const retVar = returns.reduce((s, r) => s + Math.pow(r - retAvg, 2), 0) / returns.length;
-                volatilityBySymbol[stockChart.symbol] = Math.sqrt(retVar);
-            }
-        });
-    }
-
     const summaryHtml = `
         <div class="stats-summary">
             <div class="summary-card featured">
@@ -2209,60 +2249,7 @@ function renderStats(chartData, currentData) {
         </div>
     `;
 
-    const cardsHtml = validStocks.map((stock, index) => {
-        const ytd = stock.changePercent;
-        const vsAvg = ytd - avg;
-        const vsAvgClass = vsAvg >= 0 ? 'positive' : 'negative';
-        const ytdClass = ytd >= 0 ? 'positive' : 'negative';
-
-        let vsSpy = null;
-        let vsSpyStr = '-';
-        let vsSpyClass = '';
-        if (spyYtd !== null) {
-            vsSpy = ytd - spyYtd;
-            vsSpyStr = formatSignedPercentValue(vsSpy);
-            vsSpyClass = vsSpy >= 0 ? 'positive' : 'negative';
-        }
-
-        let vol = '-';
-        let volLabel = 'Volatility';
-        const volValue = volatilityBySymbol[stock.symbol];
-        if (Number.isFinite(volValue)) {
-            vol = `${volValue.toFixed(1)} pts`;
-        }
-
-        return `
-            <div class="stat-card ${index < 3 ? 'top-stat' : ''}">
-                <div class="stat-card-header">
-                    <div class="stat-title">
-                        <span class="stat-rank">#${index + 1}</span>
-                        <span class="stat-card-name">${escapeHtml(stock.name)}</span>
-                        <span class="stat-card-symbol">${escapeHtml(stock.symbol)}</span>
-                    </div>
-                    <span class="stat-ytd ${ytdClass}">${formatSignedPercentValue(ytd)}</span>
-                </div>
-                <div class="stat-card-metrics">
-                    <div class="stat-metric">
-                        <span class="stat-metric-label">vs Avg</span>
-                        <span class="stat-metric-value ${vsAvgClass}">${formatSignedPercentValue(vsAvg)}</span>
-                    </div>
-                    <div class="stat-metric">
-                        <span class="stat-metric-label">vs SPY</span>
-                        <span class="stat-metric-value ${vsSpyClass}">${vsSpyStr}</span>
-                    </div>
-                    <div class="stat-metric">
-                        <span class="stat-metric-label">${volLabel}</span>
-                        <span class="stat-metric-value">${vol}</span>
-                    </div>
-                </div>
-            </div>
-        `;
-    }).join('');
-
-    grid.innerHTML = `
-        ${summaryHtml}
-        <div class="stats-grid">${cardsHtml}</div>
-    `;
+    grid.innerHTML = summaryHtml;
 }
 
 // Check if US stock market is currently open (client-side check)
@@ -2332,6 +2319,7 @@ async function loadIndexes() {
 
         renderIndexes(data);
         if (window.lastChartData && window.lastLeaderboardData) {
+            renderLeaderboard(window.lastLeaderboardData);
             renderStats(window.lastChartData, window.lastLeaderboardData);
         }
     } catch (error) {
