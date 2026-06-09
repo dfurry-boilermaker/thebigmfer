@@ -23,7 +23,8 @@ function toggleTheme() {
     // Re-render chart with new theme colors if chart exists
     if (performanceChart && window.lastChartData && window.lastLeaderboardData) {
         renderChart(window.lastChartData, window.lastLeaderboardData);
-        renderZoomedChart(window.lastChartData, window.lastLeaderboardData);renderStats(window.lastChartData, window.lastLeaderboardData);
+        renderZoomedChart(window.lastChartData, window.lastLeaderboardData);
+        renderStats(window.lastChartData, window.lastLeaderboardData);
     }
 }
 
@@ -747,6 +748,7 @@ async function loadChart() {
             window.lastLeaderboardData = cachedCurrentData;
             renderChart(cachedChartData, cachedCurrentData);
             renderZoomedChart(cachedChartData, cachedCurrentData);
+            renderStats(cachedChartData, cachedCurrentData);
 
             // Fetch fresh data in background (don't wait for it)
             fetchChartInBackground();
@@ -767,6 +769,7 @@ async function loadChart() {
             window.lastLeaderboardData = cachedCurrentData;
             renderChart(cachedChartData, cachedCurrentData);
             renderZoomedChart(cachedChartData, cachedCurrentData);
+            renderStats(cachedChartData, cachedCurrentData);
         }
     }
 }
@@ -818,6 +821,7 @@ async function fetchChartData() {
     // Render the charts
     renderChart(chartData, currentData);
     renderZoomedChart(chartData, currentData);
+    renderStats(chartData, currentData);
 }
 
 async function fetchChartInBackground() {
@@ -842,6 +846,7 @@ async function fetchChartInBackground() {
                 window.lastLeaderboardData = currentData;
                 renderChart(chartData, currentData);
                 renderZoomedChart(chartData, currentData);
+                renderStats(chartData, currentData);
                 
                 console.log('Background refresh: chart and leaderboard data updated');
             }
@@ -1675,6 +1680,35 @@ function renderChart(chartData, currentData) {
 // Zoomed chart showing the middle pack (-35% to +20%)
 let zoomedChart = null;
 
+function formatSignedPercentValue(value, decimals = 1) {
+    if (value === null || value === undefined || Number.isNaN(Number(value))) return '-';
+    const number = Number(value);
+    return `${number >= 0 ? '+' : ''}${number.toFixed(decimals)}%`;
+}
+
+function renderPackSummary(stocksInRange, ytdMap, zoomMin, zoomMax) {
+    const summary = document.getElementById('packSummary');
+    if (!summary) return;
+
+    if (!stocksInRange || stocksInRange.length === 0) {
+        summary.innerHTML = `
+            <span class="pack-pill muted">No managers in the ${zoomMin}% to +${zoomMax}% window</span>
+        `;
+        return;
+    }
+
+    const sortedPack = [...stocksInRange].sort((a, b) => (ytdMap[b.symbol] || 0) - (ytdMap[a.symbol] || 0));
+    const leader = sortedPack[0];
+    const trailer = sortedPack[sortedPack.length - 1];
+    const spread = (ytdMap[leader.symbol] || 0) - (ytdMap[trailer.symbol] || 0);
+
+    summary.innerHTML = `
+        <span class="pack-pill">${stocksInRange.length} in view</span>
+        <span class="pack-pill">Pack lead: ${escapeHtml(leader.name)} ${formatSignedPercentValue(ytdMap[leader.symbol])}</span>
+        <span class="pack-pill">Spread: ${spread.toFixed(1)} pts</span>
+    `;
+}
+
 function renderZoomedChart(chartData, currentData) {
     const ctx = document.getElementById('zoomedChart');
     if (!ctx || !chartData || !chartData.data || chartData.data.length === 0) return;
@@ -1710,7 +1744,21 @@ function renderZoomedChart(chartData, currentData) {
         return ytd !== undefined && ytd >= ZOOM_MIN && ytd <= ZOOM_MAX;
     });
 
-    if (stocksInRange.length === 0) return;
+    renderPackSummary(stocksInRange, ytdMap, ZOOM_MIN, ZOOM_MAX);
+
+    if (stocksInRange.length === 0) {
+        const parent = ctx.parentElement;
+        if (parent) {
+            parent.classList.add('is-empty');
+            parent.setAttribute('data-empty-message', 'No managers are currently inside the middle-pack range.');
+        }
+        return;
+    }
+
+    if (ctx.parentElement) {
+        ctx.parentElement.classList.remove('is-empty');
+        ctx.parentElement.removeAttribute('data-empty-message');
+    }
 
     // Build timestamp index (same approach as main chart)
     const allTimestamps = [];
@@ -1942,11 +1990,25 @@ function renderStats(chartData, currentData) {
     const grid = document.getElementById('statsGrid');
     if (!grid || !currentData || !Array.isArray(currentData) || currentData.length === 0) return;
 
+    const validStocks = [...currentData]
+        .filter(s => s.changePercent !== null && s.changePercent !== undefined)
+        .sort((a, b) => b.changePercent - a.changePercent);
+
+    if (validStocks.length === 0) {
+        grid.innerHTML = `<div class="empty-state"><p>No statistics available yet.</p></div>`;
+        return;
+    }
+
     // Calculate group stats
-    const ytdValues = currentData.filter(s => s.changePercent !== null).map(s => s.changePercent);
+    const ytdValues = validStocks.map(s => s.changePercent);
     const avg = ytdValues.reduce((a, b) => a + b, 0) / ytdValues.length;
     const variance = ytdValues.reduce((sum, v) => sum + Math.pow(v - avg, 2), 0) / ytdValues.length;
     const stdDev = Math.sqrt(variance);
+    const positiveCount = ytdValues.filter(v => v >= 0).length;
+    const aboveAverageCount = ytdValues.filter(v => v >= avg).length;
+    const leader = validStocks[0];
+    const laggard = validStocks[validStocks.length - 1];
+    const fieldSpread = leader.changePercent - laggard.changePercent;
 
     // Get SPY benchmark (if available from indexes)
     let spyYtd = null;
@@ -1959,63 +2021,111 @@ function renderStats(chartData, currentData) {
         } catch (e) {}
     }
 
-    // Build per-stock stats
-    const sorted = [...currentData].filter(s => s.changePercent !== null)
-        .sort((a, b) => b.changePercent - a.changePercent);
-
-    grid.innerHTML = sorted.map(stock => {
-        const ytd = stock.changePercent;
-        const vsAvg = ytd - avg;
-        const vsAvgSign = vsAvg >= 0 ? '+' : '';
-        const vsAvgClass = vsAvg >= 0 ? 'positive' : 'negative';
-
-        let vsSpy = null;
-        let vsSpyStr = '-';
-        let vsSpyClass = '';
-        if (spyYtd !== null) {
-            vsSpy = ytd - spyYtd;
-            vsSpyStr = `${vsSpy >= 0 ? '+' : ''}${vsSpy.toFixed(1)}%`;
-            vsSpyClass = vsSpy >= 0 ? 'positive' : 'negative';
-        }
-
-        // Calculate volatility from chart data if available
-        let vol = '-';
-        if (chartData && chartData.data) {
-            const stockChart = chartData.data.find(s => s.symbol === stock.symbol);
-            if (stockChart && stockChart.data && stockChart.data.length > 5) {
+    const volatilityBySymbol = {};
+    if (chartData && chartData.data) {
+        chartData.data.forEach(stockChart => {
+            if (stockChart && stockChart.symbol && stockChart.data && stockChart.data.length > 5) {
                 const returns = [];
                 for (let i = 1; i < stockChart.data.length; i++) {
                     returns.push(stockChart.data[i] - stockChart.data[i - 1]);
                 }
                 const retAvg = returns.reduce((a, b) => a + b, 0) / returns.length;
                 const retVar = returns.reduce((s, r) => s + Math.pow(r - retAvg, 2), 0) / returns.length;
-                vol = Math.sqrt(retVar).toFixed(1) + '%';
+                volatilityBySymbol[stockChart.symbol] = Math.sqrt(retVar);
             }
+        });
+    }
+
+    const volatilityValues = Object.values(volatilityBySymbol).filter(v => Number.isFinite(v)).sort((a, b) => a - b);
+    const medianVolatility = volatilityValues.length > 0
+        ? volatilityValues[Math.floor(volatilityValues.length / 2)]
+        : null;
+
+    const summaryHtml = `
+        <div class="stats-summary">
+            <div class="summary-card featured">
+                <span class="summary-label">Field leader</span>
+                <strong>${escapeHtml(leader.name)}</strong>
+                <span class="summary-value positive">${formatSignedPercentValue(leader.changePercent)}</span>
+            </div>
+            <div class="summary-card">
+                <span class="summary-label">Average return</span>
+                <strong>${formatSignedPercentValue(avg)}</strong>
+                <span class="summary-note">${aboveAverageCount}/${validStocks.length} above average</span>
+            </div>
+            <div class="summary-card">
+                <span class="summary-label">Positive picks</span>
+                <strong>${positiveCount}/${validStocks.length}</strong>
+                <span class="summary-note">${Math.round((positiveCount / validStocks.length) * 100)}% of the field</span>
+            </div>
+            <div class="summary-card">
+                <span class="summary-label">Field spread</span>
+                <strong>${fieldSpread.toFixed(1)} pts</strong>
+                <span class="summary-note">Leader to laggard</span>
+            </div>
+            <div class="summary-card">
+                <span class="summary-label">Dispersion</span>
+                <strong>${stdDev.toFixed(1)} pts</strong>
+                <span class="summary-note">Standard deviation</span>
+            </div>
+        </div>
+    `;
+
+    const cardsHtml = validStocks.map((stock, index) => {
+        const ytd = stock.changePercent;
+        const vsAvg = ytd - avg;
+        const vsAvgClass = vsAvg >= 0 ? 'positive' : 'negative';
+        const ytdClass = ytd >= 0 ? 'positive' : 'negative';
+
+        let vsSpy = null;
+        let vsSpyStr = '-';
+        let vsSpyClass = '';
+        if (spyYtd !== null) {
+            vsSpy = ytd - spyYtd;
+            vsSpyStr = formatSignedPercentValue(vsSpy);
+            vsSpyClass = vsSpy >= 0 ? 'positive' : 'negative';
+        }
+
+        let vol = '-';
+        let volLabel = 'No trend';
+        const volValue = volatilityBySymbol[stock.symbol];
+        if (Number.isFinite(volValue)) {
+            vol = `${volValue.toFixed(1)} pts`;
+            volLabel = medianVolatility !== null && volValue > medianVolatility ? 'Choppier' : 'Steadier';
         }
 
         return `
-            <div class="stat-card">
+            <div class="stat-card ${index < 3 ? 'top-stat' : ''}">
                 <div class="stat-card-header">
-                    <span class="stat-card-name">${escapeHtml(stock.name)}</span>
-                    <span class="stat-card-symbol">${escapeHtml(stock.symbol)}</span>
+                    <div class="stat-title">
+                        <span class="stat-rank">#${index + 1}</span>
+                        <span class="stat-card-name">${escapeHtml(stock.name)}</span>
+                        <span class="stat-card-symbol">${escapeHtml(stock.symbol)}</span>
+                    </div>
+                    <span class="stat-ytd ${ytdClass}">${formatSignedPercentValue(ytd)}</span>
                 </div>
                 <div class="stat-card-metrics">
                     <div class="stat-metric">
                         <span class="stat-metric-label">vs Avg</span>
-                        <span class="stat-metric-value ${vsAvgClass}">${vsAvgSign}${vsAvg.toFixed(1)}%</span>
+                        <span class="stat-metric-value ${vsAvgClass}">${formatSignedPercentValue(vsAvg)}</span>
                     </div>
                     <div class="stat-metric">
                         <span class="stat-metric-label">vs SPY</span>
                         <span class="stat-metric-value ${vsSpyClass}">${vsSpyStr}</span>
                     </div>
                     <div class="stat-metric">
-                        <span class="stat-metric-label">Vol</span>
+                        <span class="stat-metric-label">${volLabel}</span>
                         <span class="stat-metric-value">${vol}</span>
                     </div>
                 </div>
             </div>
         `;
     }).join('');
+
+    grid.innerHTML = `
+        ${summaryHtml}
+        <div class="stats-grid">${cardsHtml}</div>
+    `;
 }
 
 // Check if US stock market is currently open (client-side check)
@@ -2077,7 +2187,16 @@ async function loadIndexes() {
             return;
         }
         
+        try {
+            localStorage.setItem('stock_competition_indexes', JSON.stringify(data));
+        } catch (error) {
+            console.log('Unable to cache index data:', error.message);
+        }
+
         renderIndexes(data);
+        if (window.lastChartData && window.lastLeaderboardData) {
+            renderStats(window.lastChartData, window.lastLeaderboardData);
+        }
     } catch (error) {
         console.error('Error loading indexes:', error);
         // Show error instead of fallback data

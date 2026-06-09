@@ -54,7 +54,13 @@
 
             <!-- Zoomed Chart (middle pack) -->
             <section class="chart-section chart-section-zoomed">
-                <h2>The Pack</h2>
+                <div class="section-heading">
+                    <div>
+                        <h2>The Pack</h2>
+                        <p class="section-description">A closer look at managers clustered around the middle of the field.</p>
+                    </div>
+                    <div id="packSummary" class="pack-summary" aria-live="polite"></div>
+                </div>
                 <div class="chart-container chart-container-zoomed">
                     <canvas id="zoomedChart"></canvas>
                 </div>
@@ -70,8 +76,13 @@
 
             <!-- Stats Section -->
             <section class="stats-section">
-                <h2>Statistics</h2>
-                <div id="statsGrid" class="stats-grid">
+                <div class="section-heading">
+                    <div>
+                        <h2>Statistics</h2>
+                        <p class="section-description">Quick context for standings, benchmark performance, and consistency.</p>
+                    </div>
+                </div>
+                <div id="statsGrid" class="stats-board">
                     <div class="loading">Loading stats...</div>
                 </div>
             </section>
