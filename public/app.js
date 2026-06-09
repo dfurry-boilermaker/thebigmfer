@@ -1502,8 +1502,8 @@ function renderChart(chartData, currentData) {
                             family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
                         },
                         padding: {
-                            top: 0,
-                            bottom: isMobile ? 4 : 8
+                            top: isMobile ? 2 : 4,
+                            bottom: isMobile ? 8 : 10
                         }
                     },
                     legend: {
@@ -1578,7 +1578,7 @@ function renderChart(chartData, currentData) {
                     padding: {
                         right: isMobile ? 8 : 16,
                         left: isMobile ? 0 : 8,
-                        top: isMobile ? 8 : 16,
+                        top: isMobile ? 2 : 4,
                         bottom: isMobile ? 4 : 8
                     }
                 },
