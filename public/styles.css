@@ -516,20 +516,92 @@ section h2 {
 }
 
 @media (max-width: 480px) {
+    .chart-section-zoomed .section-heading {
+        gap: 6px;
+        margin-bottom: 8px;
+    }
+
+    .chart-section-zoomed .section-description {
+        display: none;
+    }
+
+    .pack-summary {
+        gap: 4px;
+    }
+
+    .pack-pill {
+        min-height: 20px;
+        padding: 3px 6px;
+        font-size: 0.5625rem;
+    }
+
+    .pack-race-card {
+        grid-template-columns: minmax(130px, 1fr) auto;
+        gap: 6px;
+        padding: 5px 6px;
+        min-height: 34px;
+    }
+
     .pack-race-header {
+        grid-template-columns: 6px 22px minmax(0, 1fr) auto;
         gap: 6px;
     }
 
-    .pack-race-metrics {
-        gap: 6px;
+    .pack-color {
+        width: 6px;
+        height: 22px;
     }
 
-    .pack-race-metrics strong {
+    .pack-race-rank {
+        font-size: 0.5625rem;
+    }
+
+    .pack-race-title {
+        gap: 4px;
+    }
+
+    .pack-name {
         font-size: 0.6875rem;
     }
 
+    .pack-symbol {
+        font-size: 0.5625rem;
+    }
+
+    .pack-race-ytd {
+        font-size: 0.6875rem;
+    }
+
+    .pack-race-spark {
+        display: none;
+    }
+
+    .pack-race-metrics {
+        display: flex;
+        justify-content: flex-end;
+        gap: 6px;
+    }
+
+    .pack-race-metrics span {
+        padding: 0;
+        border: none;
+        background: transparent;
+        min-width: auto;
+        display: block;
+    }
+
+    .pack-race-metrics span:nth-child(2) {
+        display: none;
+    }
+
+    .pack-race-metrics strong {
+        font-size: 0.625rem;
+    }
+
     .pack-race-metrics small {
-        font-size: 0.5rem;
+        display: inline;
+        margin-left: 2px;
+        font-size: 0.4375rem;
     }
 }
 
