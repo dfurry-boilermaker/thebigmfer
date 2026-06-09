@@ -336,52 +336,61 @@ section h2 {
     text-align: center;
 }
 
-.pack-insights {
-    margin-top: 10px;
+.pack-race {
+    width: 100%;
 }
 
-.pack-insights-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 12px;
-    margin-bottom: 8px;
-    color: var(--text-tertiary);
-    font-size: 0.6875rem;
-    font-weight: 500;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-}
-
-.pack-insights-list {
+.pack-race-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     gap: 1px;
     background: var(--border-color);
     border: 1px solid var(--border-color);
 }
 
-.pack-insight-card {
-    display: grid;
-    grid-template-columns: 8px minmax(70px, 1fr) 48px 34px 58px 62px;
-    align-items: center;
-    gap: 8px;
-    min-height: 36px;
-    padding: 7px 10px;
+.pack-race-card {
     background: var(--bg-secondary);
-    color: var(--text-secondary);
-    font-size: 0.75rem;
-    font-variant-numeric: tabular-nums;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 
-.pack-insight-card.pack-leader {
-    background: var(--positive-bg);
+.pack-race-card.pack-leader {
+    background: linear-gradient(135deg, var(--positive-bg), var(--bg-secondary) 70%);
+}
+
+.pack-race-header {
+    display: grid;
+    grid-template-columns: 8px 32px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
 }
 
 .pack-color {
     width: 8px;
-    height: 22px;
+    height: 28px;
     display: block;
+}
+
+.pack-race-rank {
+    color: var(--text-tertiary);
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.pack-race-title {
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.pack-race-ytd {
+    font-size: 0.9375rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
 }
 
 .pack-name {
@@ -391,30 +400,69 @@ section h2 {
     white-space: nowrap;
     color: var(--text-primary);
     font-weight: 600;
+    font-size: 0.9375rem;
 }
 
-.pack-symbol,
-.pack-rank,
-.pack-gap {
+.pack-symbol {
     color: var(--text-tertiary);
+    font-size: 0.75rem;
 }
 
-.pack-ytd {
-    font-weight: 700;
-    text-align: right;
-}
-
-.pack-ytd.positive {
+.pack-race-ytd.positive {
     color: var(--color-positive);
 }
 
-.pack-ytd.negative {
+.pack-race-ytd.negative {
     color: var(--color-negative);
 }
 
-.pack-gap {
-    text-align: right;
-    white-space: nowrap;
+.pack-race-spark {
+    height: 42px;
+}
+
+.pack-sparkline {
+    width: 100%;
+    height: 42px;
+    display: block;
+    overflow: visible;
+}
+
+.pack-sparkline-zero {
+    stroke: var(--border-color);
+    stroke-width: 1;
+    stroke-dasharray: 3 3;
+}
+
+.pack-race-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.pack-race-metrics span {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 7px 8px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-light);
+}
+
+.pack-race-metrics strong {
+    color: var(--text-primary);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.pack-race-metrics small {
+    color: var(--text-tertiary);
+    font-size: 0.5625rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
 }
 
 @media (max-width: 768px) {
@@ -443,41 +491,47 @@ section h2 {
         padding: 5px 8px;
     }
 
-    .chart-container-zoomed {
-        height: 260px;
-        min-height: 260px;
-    }
-
-    .pack-insights-header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 2px;
-        font-size: 0.625rem;
-    }
-
-    .pack-insights-list {
+    .pack-race-grid {
         grid-template-columns: 1fr;
     }
 
-    .pack-insight-card {
-        grid-template-columns: 8px minmax(68px, 1fr) 44px 30px 54px 58px;
-        gap: 6px;
-        min-height: 32px;
-        padding: 6px 8px;
-        font-size: 0.6875rem;
+    .pack-race-card {
+        padding: 10px;
+        gap: 8px;
+    }
+
+    .pack-race-header {
+        grid-template-columns: 8px 28px minmax(0, 1fr) auto;
+    }
+
+    .pack-race-ytd {
+        font-size: 0.8125rem;
+    }
+
+    .pack-name {
+        font-size: 0.8125rem;
+    }
+
+    .pack-race-metrics span {
+        padding: 6px 7px;
     }
 }
 
 @media (max-width: 480px) {
-    .chart-container-zoomed {
-        height: 250px;
-        min-height: 250px;
+    .pack-race-header {
+        gap: 6px;
     }
 
-    .pack-insight-card {
-        grid-template-columns: 8px minmax(58px, 1fr) 38px 28px 50px 52px;
-        gap: 5px;
-        font-size: 0.625rem;
+    .pack-race-metrics {
+        gap: 6px;
+    }
+
+    .pack-race-metrics strong {
+        font-size: 0.6875rem;
+    }
+
+    .pack-race-metrics small {
+        font-size: 0.5rem;
     }
 }
 

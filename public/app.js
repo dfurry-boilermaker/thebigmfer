@@ -1709,12 +1709,63 @@ function renderPackSummary(stocksInRange, ytdMap, zoomMin, zoomMax) {
     `;
 }
 
-function renderPackInsights(stocksInRange, ytdMap, currentData, chartData, colors) {
-    const container = document.getElementById('packInsights');
+function calculateMedian(values) {
+    if (!values || values.length === 0) return null;
+    const sorted = [...values].sort((a, b) => a - b);
+    const middle = Math.floor(sorted.length / 2);
+    return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
+}
+
+function buildSparkline(values, color) {
+    const cleanValues = values.filter(value => Number.isFinite(value)).slice(-36);
+    if (cleanValues.length < 2) {
+        return `<svg class="pack-sparkline" viewBox="0 0 120 36" aria-hidden="true"></svg>`;
+    }
+
+    let min = Math.min(...cleanValues);
+    let max = Math.max(...cleanValues);
+    const padding = Math.max((max - min) * 0.15, 1);
+    min -= padding;
+    max += padding;
+
+    const points = cleanValues.map((value, index) => {
+        const x = (index / (cleanValues.length - 1)) * 118 + 1;
+        const y = 34 - ((value - min) / (max - min)) * 32;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+
+    let zeroLine = '';
+    if (min < 0 && max > 0) {
+        const zeroY = 34 - ((0 - min) / (max - min)) * 32;
+        zeroLine = `<line x1="0" y1="${zeroY.toFixed(1)}" x2="120" y2="${zeroY.toFixed(1)}" class="pack-sparkline-zero" />`;
+    }
+
+    return `
+        <svg class="pack-sparkline" viewBox="0 0 120 36" aria-hidden="true">
+            ${zeroLine}
+            <polyline points="${points}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+    `;
+}
+
+function getRecentSeries(stock, ytdMap) {
+    const data = Array.isArray(stock.data) ? [...stock.data] : [];
+    const timestamps = Array.isArray(stock.timestamps) ? stock.timestamps : [];
+    const todayTimestamp = Date.now();
+
+    const values = data.filter((_, index) => !timestamps[index] || timestamps[index] <= todayTimestamp);
+    if (values.length > 0 && ytdMap[stock.symbol] !== undefined) {
+        values[values.length - 1] = ytdMap[stock.symbol];
+    }
+    return values;
+}
+
+function renderPackRace(stocksInRange, ytdMap, currentData, chartData, colors) {
+    const container = document.getElementById('packRace');
     if (!container) return;
 
     if (!stocksInRange || stocksInRange.length === 0) {
-        container.innerHTML = '';
+        container.innerHTML = `<div class="empty-state"><p>No managers are currently inside the middle-pack range.</p></div>`;
         return;
     }
 
@@ -1730,42 +1781,55 @@ function renderPackInsights(stocksInRange, ytdMap, currentData, chartData, color
 
     const sortedPack = [...stocksInRange].sort((a, b) => (ytdMap[b.symbol] || 0) - (ytdMap[a.symbol] || 0));
     const packLeadYtd = ytdMap[sortedPack[0].symbol] || 0;
+    const packMedian = calculateMedian(sortedPack.map(stock => ytdMap[stock.symbol]).filter(value => value !== undefined));
 
     const cards = sortedPack.map((stock, index) => {
         const ytd = ytdMap[stock.symbol];
         const gapToLead = ytd - packLeadYtd;
+        const vsMedian = packMedian !== null ? ytd - packMedian : null;
         const overallRank = overallRanks[stock.symbol] ? `#${overallRanks[stock.symbol]}` : '-';
         const originalIndex = chartData.data.findIndex(item => item.symbol === stock.symbol);
         const color = colors[Math.max(0, originalIndex) % colors.length];
+        const series = getRecentSeries(stock, ytdMap);
+        const recentMove = series.length > 1 ? series[series.length - 1] - series[series.length - 2] : null;
 
         return `
-            <div class="pack-insight-card ${index === 0 ? 'pack-leader' : ''}">
-                <span class="pack-color" style="background: ${color};"></span>
-                <span class="pack-name">${escapeHtml(stock.name)}</span>
-                <span class="pack-symbol">${escapeHtml(stock.symbol)}</span>
-                <span class="pack-rank">${overallRank}</span>
-                <span class="pack-ytd ${ytd >= 0 ? 'positive' : 'negative'}">${formatSignedPercentValue(ytd)}</span>
-                <span class="pack-gap">${index === 0 ? 'Pack lead' : `${gapToLead.toFixed(1)} pts`}</span>
-            </div>
+            <article class="pack-race-card ${index === 0 ? 'pack-leader' : ''}">
+                <div class="pack-race-header">
+                    <span class="pack-color" style="background: ${color};"></span>
+                    <span class="pack-race-rank">${overallRank}</span>
+                    <div class="pack-race-title">
+                        <span class="pack-name">${escapeHtml(stock.name)}</span>
+                        <span class="pack-symbol">${escapeHtml(stock.symbol)}</span>
+                    </div>
+                    <span class="pack-race-ytd ${ytd >= 0 ? 'positive' : 'negative'}">${formatSignedPercentValue(ytd)}</span>
+                </div>
+                <div class="pack-race-spark">
+                    ${buildSparkline(series, color)}
+                </div>
+                <div class="pack-race-metrics">
+                    <span><strong>${index === 0 ? 'Lead' : `${gapToLead.toFixed(1)} pts`}</strong><small>Gap</small></span>
+                    <span><strong>${vsMedian === null ? '-' : formatSignedPercentValue(vsMedian)}</strong><small>vs Median</small></span>
+                    <span><strong>${recentMove === null ? '-' : formatSignedPercentValue(recentMove)}</strong><small>Recent</small></span>
+                </div>
+            </article>
         `;
     }).join('');
 
     container.innerHTML = `
-        <div class="pack-insights-header">
-            <span>Pack standings</span>
-            <span>Rank, YTD return, and gap to pack leader</span>
-        </div>
-        <div class="pack-insights-list">
+        <div class="pack-race-grid">
             ${cards}
         </div>
     `;
 }
 
 function renderZoomedChart(chartData, currentData) {
-    const ctx = document.getElementById('zoomedChart');
-    if (!ctx || !chartData || !chartData.data || chartData.data.length === 0) return;
+    if (!chartData || !chartData.data || chartData.data.length === 0) return;
 
-    if (zoomedChart) zoomedChart.destroy();
+    if (zoomedChart) {
+        zoomedChart.destroy();
+        zoomedChart = null;
+    }
 
     const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
     const isMobile = window.innerWidth < 768;
@@ -1797,7 +1861,8 @@ function renderZoomedChart(chartData, currentData) {
     });
 
     renderPackSummary(stocksInRange, ytdMap, ZOOM_MIN, ZOOM_MAX);
-    renderPackInsights(stocksInRange, ytdMap, currentData, chartData, colors);
+    renderPackRace(stocksInRange, ytdMap, currentData, chartData, colors);
+    return;
 
     if (stocksInRange.length === 0) {
         const parent = ctx.parentElement;
