@@ -263,8 +263,8 @@ section h2 {
 
 @media (max-width: 768px) {
     .chart-container {
-        height: 400px;
-        min-height: 400px;
+        height: 500px;
+        min-height: 500px;
         overflow: visible;
     }
 
@@ -285,8 +285,8 @@ section h2 {
 
 @media (max-width: 480px) {
     .chart-container {
-        height: 350px;
-        min-height: 350px;
+        height: 480px;
+        min-height: 480px;
     }
 
     .chart-section {
