@@ -23,7 +23,7 @@ function toggleTheme() {
     // Re-render chart with new theme colors if chart exists
     if (performanceChart && window.lastChartData && window.lastLeaderboardData) {
         renderChart(window.lastChartData, window.lastLeaderboardData);
-        renderZoomedChart(window.lastChartData, window.lastLeaderboardData);
+        renderZoomedChart(window.lastChartData, window.lastLeaderboardData);renderStats(window.lastChartData, window.lastLeaderboardData);
     }
 }
 
@@ -1508,7 +1508,7 @@ function renderChart(chartData, currentData) {
                         },
                         ticks: {
                             display: true,
-                            maxTicksLimit: isMobile ? 4 : 6,
+                            maxTicksLimit: isMobile ? 6 : 8,
                             autoSkip: true,
                             autoSkipPadding: isMobile ? 15 : 20,
                             color: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.4)' : '#aaaaaa',
@@ -1578,7 +1578,7 @@ function renderChart(chartData, currentData) {
                             : '';
 
                         const labelText = isMobile
-                            ? `${name} ${ytdFormatted}`
+                            ? `${name} ${symbol} ${ytdFormatted}`
                             : `${name} • ${symbol} • ${ytdFormatted}`;
 
                         const textWidth = ctx.measureText(labelText).width;
@@ -1689,8 +1689,8 @@ function renderZoomedChart(chartData, currentData) {
         currentData.forEach(stock => { ytdMap[stock.symbol] = stock.changePercent; });
     }
 
-    const ZOOM_MIN = -35;
-    const ZOOM_MAX = 20;
+    const ZOOM_MIN = -18;
+    const ZOOM_MAX = 15;
 
     const lightColors = [
         '#2563eb', '#059669', '#dc2626', '#d97706', '#7c3aed',
@@ -1766,7 +1766,7 @@ function renderZoomedChart(chartData, currentData) {
             data: timeData,
             borderColor: color,
             backgroundColor: color,
-            borderWidth: isMobile ? 1.5 : 2,
+            borderWidth: isMobile ? 1.25 : 1.75,
             fill: false,
             tension: 0.1,
             pointRadius: 0,
@@ -1823,7 +1823,7 @@ function renderZoomedChart(chartData, currentData) {
                     grid: { display: false },
                     ticks: {
                         display: true,
-                        maxTicksLimit: isMobile ? 4 : 6,
+                        maxTicksLimit: isMobile ? 6 : 8,
                         autoSkip: true,
                         color: currentTheme === 'dark' ? 'rgba(255,255,255,0.4)' : '#aaaaaa',
                         font: { size: isMobile ? 9 : 11, weight: '400' },
@@ -1842,6 +1842,7 @@ function renderZoomedChart(chartData, currentData) {
         plugins: [{
             id: 'zoomedLabels',
             afterDatasetsDraw: (chart) => {
+                if (window.innerWidth < 768) return;
                 const chartCtx = chart.ctx;
                 const chartArea = chart.chartArea;
                 if (!chartArea) return;
@@ -1868,7 +1869,7 @@ function renderZoomedChart(chartData, currentData) {
                     const symbol = labelParts[1] ? labelParts[1].replace(')', '') : '';
                     const ytd = ytdMap[symbol];
                     const ytdStr = ytd !== undefined ? `${ytd >= 0 ? '+' : ''}${ytd.toFixed(1)}%` : '';
-                    const text = `${name} ${ytdStr}`;
+                    const text = `${name} ${symbol} ${ytdStr}`;
                     const textWidth = chartCtx.measureText(text).width;
 
                     labelData.push({ y: lastPoint.y, text, textWidth, color: dataset.borderColor });
@@ -1936,7 +1937,86 @@ function renderZoomedChart(chartData, currentData) {
     });
 }
 
-// Handle window resize (Chart.js responsive:true handles it)
+// Render statistics section
+function renderStats(chartData, currentData) {
+    const grid = document.getElementById('statsGrid');
+    if (!grid || !currentData || !Array.isArray(currentData) || currentData.length === 0) return;
+
+    // Calculate group stats
+    const ytdValues = currentData.filter(s => s.changePercent !== null).map(s => s.changePercent);
+    const avg = ytdValues.reduce((a, b) => a + b, 0) / ytdValues.length;
+    const variance = ytdValues.reduce((sum, v) => sum + Math.pow(v - avg, 2), 0) / ytdValues.length;
+    const stdDev = Math.sqrt(variance);
+
+    // Get SPY benchmark (if available from indexes)
+    let spyYtd = null;
+    const indexCache = localStorage.getItem('stock_competition_indexes');
+    if (indexCache) {
+        try {
+            const indexes = JSON.parse(indexCache);
+            const spy = indexes.find(i => i.symbol === 'SPY');
+            if (spy) spyYtd = spy.changePercent;
+        } catch (e) {}
+    }
+
+    // Build per-stock stats
+    const sorted = [...currentData].filter(s => s.changePercent !== null)
+        .sort((a, b) => b.changePercent - a.changePercent);
+
+    grid.innerHTML = sorted.map(stock => {
+        const ytd = stock.changePercent;
+        const vsAvg = ytd - avg;
+        const vsAvgSign = vsAvg >= 0 ? '+' : '';
+        const vsAvgClass = vsAvg >= 0 ? 'positive' : 'negative';
+
+        let vsSpy = null;
+        let vsSpyStr = '-';
+        let vsSpyClass = '';
+        if (spyYtd !== null) {
+            vsSpy = ytd - spyYtd;
+            vsSpyStr = `${vsSpy >= 0 ? '+' : ''}${vsSpy.toFixed(1)}%`;
+            vsSpyClass = vsSpy >= 0 ? 'positive' : 'negative';
+        }
+
+        // Calculate volatility from chart data if available
+        let vol = '-';
+        if (chartData && chartData.data) {
+            const stockChart = chartData.data.find(s => s.symbol === stock.symbol);
+            if (stockChart && stockChart.data && stockChart.data.length > 5) {
+                const returns = [];
+                for (let i = 1; i < stockChart.data.length; i++) {
+                    returns.push(stockChart.data[i] - stockChart.data[i - 1]);
+                }
+                const retAvg = returns.reduce((a, b) => a + b, 0) / returns.length;
+                const retVar = returns.reduce((s, r) => s + Math.pow(r - retAvg, 2), 0) / returns.length;
+                vol = Math.sqrt(retVar).toFixed(1) + '%';
+            }
+        }
+
+        return `
+            <div class="stat-card">
+                <div class="stat-card-header">
+                    <span class="stat-card-name">${escapeHtml(stock.name)}</span>
+                    <span class="stat-card-symbol">${escapeHtml(stock.symbol)}</span>
+                </div>
+                <div class="stat-card-metrics">
+                    <div class="stat-metric">
+                        <span class="stat-metric-label">vs Avg</span>
+                        <span class="stat-metric-value ${vsAvgClass}">${vsAvgSign}${vsAvg.toFixed(1)}%</span>
+                    </div>
+                    <div class="stat-metric">
+                        <span class="stat-metric-label">vs SPY</span>
+                        <span class="stat-metric-value ${vsSpyClass}">${vsSpyStr}</span>
+                    </div>
+                    <div class="stat-metric">
+                        <span class="stat-metric-label">Vol</span>
+                        <span class="stat-metric-value">${vol}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
 
 // Check if US stock market is currently open (client-side check)
 function isMarketOpen() {
