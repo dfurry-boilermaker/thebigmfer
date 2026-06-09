@@ -589,15 +589,11 @@ section h2 {
 
 @media (max-width: 480px) {
     .leaderboard-item {
-        grid-template-columns: 20px 1fr;
+        grid-template-columns: 20px auto 1fr;
         grid-template-rows: auto auto;
         gap: 4px;
         padding: 10px 8px;
         min-height: 50px;
-    }
-
-    .price-percent-combined {
-        display: none;
     }
 
     .analysis-text {
@@ -717,11 +713,11 @@ section h2 {
 
 @media (max-width: 480px) {
     .mobile-only {
-        display: flex;
+        display: none;
     }
 
     .desktop-only {
-        display: none;
+        display: flex;
     }
 }
 
@@ -961,7 +957,7 @@ section h2 {
     }
 
     .leaderboard-item {
-        grid-template-columns: 20px 1fr;
+        grid-template-columns: 20px auto 1fr;
         gap: 4px;
         padding: 10px 8px;
     }
@@ -975,7 +971,8 @@ section h2 {
         flex-direction: row;
         align-items: center;
         gap: 4px;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
+        white-space: nowrap;
     }
 
     .manager-name {
@@ -991,13 +988,14 @@ section h2 {
         font-size: 0.6875rem;
     }
 
-    .manager-info .time-periods {
-        width: 100%;
-        gap: 8px;
+    .price-percent-combined {
+        display: flex;
+        align-items: flex-end;
+        gap: 0;
     }
 
-    .price-percent-combined {
-        display: none;
+    .price-percent-combined .time-periods {
+        gap: 8px;
     }
 
     .time-period {
