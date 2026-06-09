@@ -658,70 +658,46 @@ function renderLeaderboard(data) {
         const analysisId = `analysis-${index}`;
 
         return `
-            <div class="leaderboard-item ${rankClass} ${hasAnalysis ? 'clickable' : ''}" ${hasAnalysis ? `onclick="toggleAnalysis('${analysisId}')"` : ''} id="${itemId}">
+            <div class="leaderboard-item ${rankClass} clickable" onclick="toggleAnalysis('${analysisId}')" id="${itemId}">
                 <div class="rank">${rank}</div>
                 <div class="manager-info">
                     <span class="manager-name">${escapeHtml(item.name)}</span>
                     <span class="stock-symbol">${escapeHtml(item.symbol)}</span>
                     <span class="current-price">$${formatPrice(item.currentPrice)}</span>
-                    <div class="time-periods mobile-only">
-                        <span class="time-period">
-                            <span class="period-label">1d</span>
-                            <span class="period-value ${item.change1d === null ? 'no-data' : change1dClass}">${item.change1d !== null ? getChangeSign(item.change1d) + formatPercent(item.change1d) + '%' : '-'}</span>
-                        </span>
-                        <span class="time-period">
-                            <span class="period-label">1m</span>
-                            <span class="period-value ${item.change1m === null ? 'no-data' : change1mClass}">${item.change1m !== null ? getChangeSign(item.change1m) + formatPercent(item.change1m) + '%' : '-'}</span>
-                        </span>
-                        <span class="time-period">
-                            <span class="period-label">3m</span>
-                            <span class="period-value ${item.change3m === null ? 'no-data' : change3mClass}">${item.change3m !== null ? getChangeSign(item.change3m) + formatPercent(item.change3m) + '%' : '-'}</span>
-                        </span>
-                        <span class="time-period">
-                            <span class="period-label">YTD</span>
-                            <span class="period-value ${item.changePercent === null ? 'no-data' : changeYTDClass}">${item.changePercent !== null ? getChangeSign(item.changePercent) + formatPercent(item.changePercent) + '%' : '-'}</span>
-                        </span>
-                    </div>
                 </div>
                 <div class="price-percent-combined">
-                    <div class="time-periods desktop-only">
-                        <span class="time-period">
-                            <span class="period-label">1d</span>
-                            <span class="period-value ${item.change1d === null ? 'no-data' : change1dClass}">${item.change1d !== null ? getChangeSign(item.change1d) + formatPercent(item.change1d) + '%' : '-'}</span>
-                        </span>
-                        <span class="time-period">
-                            <span class="period-label">1m</span>
-                            <span class="period-value ${item.change1m === null ? 'no-data' : change1mClass}">${item.change1m !== null ? getChangeSign(item.change1m) + formatPercent(item.change1m) + '%' : '-'}</span>
-                        </span>
-                        <span class="time-period">
-                            <span class="period-label">3m</span>
-                            <span class="period-value ${item.change3m === null ? 'no-data' : change3mClass}">${item.change3m !== null ? getChangeSign(item.change3m) + formatPercent(item.change3m) + '%' : '-'}</span>
-                        </span>
-                        <span class="time-period">
-                            <span class="period-label">YTD</span>
-                            <span class="period-value ${item.changePercent === null ? 'no-data' : changeYTDClass}">${item.changePercent !== null ? getChangeSign(item.changePercent) + formatPercent(item.changePercent) + '%' : '-'}</span>
-                        </span>
-                    </div>
-                    <div class="leaderboard-context-metrics">
-                        <span class="leaderboard-context-metric">
-                            <span class="context-label">vs Avg</span>
-                            <span class="context-value ${vsAvgClass}">${vsAvg !== null ? formatSignedPercentValue(vsAvg) : '-'}</span>
-                        </span>
-                        <span class="leaderboard-context-metric">
-                            <span class="context-label">vs SPY</span>
-                            <span class="context-value ${vsSpyClass}">${vsSpy !== null ? formatSignedPercentValue(vsSpy) : '-'}</span>
-                        </span>
-                        <span class="leaderboard-context-metric">
-                            <span class="context-label">Volatility</span>
-                            <span class="context-value ${Number.isFinite(volValue) ? '' : 'no-data'}">${volText}</span>
-                        </span>
-                    </div>
+                    <span class="leaderboard-ytd ${item.changePercent === null ? 'no-data' : changeYTDClass}">${item.changePercent !== null ? getChangeSign(item.changePercent) + formatPercent(item.changePercent) + '%' : '-'}</span>
+                    <span class="leaderboard-details-label">Details</span>
                 </div>
-                ${hasAnalysis ? `
-                    <div class="analysis-content" id="${analysisId}">
-                        <div class="analysis-text">${escapeHtml(analysis.analysis)}</div>
+                <div class="analysis-content" id="${analysisId}">
+                    <div class="leaderboard-details-grid">
+                        <span class="detail-metric">
+                            <span class="detail-label">1d</span>
+                            <span class="detail-value ${item.change1d === null ? 'no-data' : change1dClass}">${item.change1d !== null ? getChangeSign(item.change1d) + formatPercent(item.change1d) + '%' : '-'}</span>
+                        </span>
+                        <span class="detail-metric">
+                            <span class="detail-label">1m</span>
+                            <span class="detail-value ${item.change1m === null ? 'no-data' : change1mClass}">${item.change1m !== null ? getChangeSign(item.change1m) + formatPercent(item.change1m) + '%' : '-'}</span>
+                        </span>
+                        <span class="detail-metric">
+                            <span class="detail-label">3m</span>
+                            <span class="detail-value ${item.change3m === null ? 'no-data' : change3mClass}">${item.change3m !== null ? getChangeSign(item.change3m) + formatPercent(item.change3m) + '%' : '-'}</span>
+                        </span>
+                        <span class="detail-metric">
+                            <span class="detail-label">vs Avg</span>
+                            <span class="detail-value ${vsAvgClass}">${vsAvg !== null ? formatSignedPercentValue(vsAvg) : '-'}</span>
+                        </span>
+                        <span class="detail-metric">
+                            <span class="detail-label">vs SPY</span>
+                            <span class="detail-value ${vsSpyClass}">${vsSpy !== null ? formatSignedPercentValue(vsSpy) : '-'}</span>
+                        </span>
+                        <span class="detail-metric">
+                            <span class="detail-label">Volatility</span>
+                            <span class="detail-value ${Number.isFinite(volValue) ? '' : 'no-data'}">${volText}</span>
+                        </span>
                     </div>
-                ` : ''}
+                    ${hasAnalysis ? `<div class="analysis-text">${escapeHtml(analysis.analysis)}</div>` : ''}
+                </div>
             </div>
         `;
     }).join('');
