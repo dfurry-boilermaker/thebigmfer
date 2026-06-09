@@ -336,6 +336,87 @@ section h2 {
     text-align: center;
 }
 
+.pack-insights {
+    margin-top: 10px;
+}
+
+.pack-insights-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 8px;
+    color: var(--text-tertiary);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.pack-insights-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1px;
+    background: var(--border-color);
+    border: 1px solid var(--border-color);
+}
+
+.pack-insight-card {
+    display: grid;
+    grid-template-columns: 8px minmax(70px, 1fr) 48px 34px 58px 62px;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    padding: 7px 10px;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.pack-insight-card.pack-leader {
+    background: var(--positive-bg);
+}
+
+.pack-color {
+    width: 8px;
+    height: 22px;
+    display: block;
+}
+
+.pack-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.pack-symbol,
+.pack-rank,
+.pack-gap {
+    color: var(--text-tertiary);
+}
+
+.pack-ytd {
+    font-weight: 700;
+    text-align: right;
+}
+
+.pack-ytd.positive {
+    color: var(--color-positive);
+}
+
+.pack-ytd.negative {
+    color: var(--color-negative);
+}
+
+.pack-gap {
+    text-align: right;
+    white-space: nowrap;
+}
+
 @media (max-width: 768px) {
     .section-heading {
         flex-direction: column;
@@ -363,15 +444,40 @@ section h2 {
     }
 
     .chart-container-zoomed {
-        height: 240px;
-        min-height: 240px;
+        height: 260px;
+        min-height: 260px;
+    }
+
+    .pack-insights-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+        font-size: 0.625rem;
+    }
+
+    .pack-insights-list {
+        grid-template-columns: 1fr;
+    }
+
+    .pack-insight-card {
+        grid-template-columns: 8px minmax(68px, 1fr) 44px 30px 54px 58px;
+        gap: 6px;
+        min-height: 32px;
+        padding: 6px 8px;
+        font-size: 0.6875rem;
     }
 }
 
 @media (max-width: 480px) {
     .chart-container-zoomed {
-        height: 220px;
-        min-height: 220px;
+        height: 250px;
+        min-height: 250px;
+    }
+
+    .pack-insight-card {
+        grid-template-columns: 8px minmax(58px, 1fr) 38px 28px 50px 52px;
+        gap: 5px;
+        font-size: 0.625rem;
     }
 }
 

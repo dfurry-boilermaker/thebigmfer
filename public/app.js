@@ -1709,6 +1709,58 @@ function renderPackSummary(stocksInRange, ytdMap, zoomMin, zoomMax) {
     `;
 }
 
+function renderPackInsights(stocksInRange, ytdMap, currentData, chartData, colors) {
+    const container = document.getElementById('packInsights');
+    if (!container) return;
+
+    if (!stocksInRange || stocksInRange.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+
+    const overallRanks = {};
+    if (currentData && Array.isArray(currentData)) {
+        [...currentData]
+            .filter(stock => stock.changePercent !== null && stock.changePercent !== undefined)
+            .sort((a, b) => b.changePercent - a.changePercent)
+            .forEach((stock, index) => {
+                overallRanks[stock.symbol] = index + 1;
+            });
+    }
+
+    const sortedPack = [...stocksInRange].sort((a, b) => (ytdMap[b.symbol] || 0) - (ytdMap[a.symbol] || 0));
+    const packLeadYtd = ytdMap[sortedPack[0].symbol] || 0;
+
+    const cards = sortedPack.map((stock, index) => {
+        const ytd = ytdMap[stock.symbol];
+        const gapToLead = ytd - packLeadYtd;
+        const overallRank = overallRanks[stock.symbol] ? `#${overallRanks[stock.symbol]}` : '-';
+        const originalIndex = chartData.data.findIndex(item => item.symbol === stock.symbol);
+        const color = colors[Math.max(0, originalIndex) % colors.length];
+
+        return `
+            <div class="pack-insight-card ${index === 0 ? 'pack-leader' : ''}">
+                <span class="pack-color" style="background: ${color};"></span>
+                <span class="pack-name">${escapeHtml(stock.name)}</span>
+                <span class="pack-symbol">${escapeHtml(stock.symbol)}</span>
+                <span class="pack-rank">${overallRank}</span>
+                <span class="pack-ytd ${ytd >= 0 ? 'positive' : 'negative'}">${formatSignedPercentValue(ytd)}</span>
+                <span class="pack-gap">${index === 0 ? 'Pack lead' : `${gapToLead.toFixed(1)} pts`}</span>
+            </div>
+        `;
+    }).join('');
+
+    container.innerHTML = `
+        <div class="pack-insights-header">
+            <span>Pack standings</span>
+            <span>Rank, YTD return, and gap to pack leader</span>
+        </div>
+        <div class="pack-insights-list">
+            ${cards}
+        </div>
+    `;
+}
+
 function renderZoomedChart(chartData, currentData) {
     const ctx = document.getElementById('zoomedChart');
     if (!ctx || !chartData || !chartData.data || chartData.data.length === 0) return;
@@ -1745,6 +1797,7 @@ function renderZoomedChart(chartData, currentData) {
     });
 
     renderPackSummary(stocksInRange, ytdMap, ZOOM_MIN, ZOOM_MAX);
+    renderPackInsights(stocksInRange, ytdMap, currentData, chartData, colors);
 
     if (stocksInRange.length === 0) {
         const parent = ctx.parentElement;
@@ -1818,7 +1871,11 @@ function renderZoomedChart(chartData, currentData) {
             fill: false,
             tension: 0.1,
             pointRadius: 0,
-            pointHoverRadius: 0
+            pointHoverRadius: isMobile ? 3 : 4,
+            pointHitRadius: 12,
+            pointHoverBackgroundColor: color,
+            pointHoverBorderColor: currentTheme === 'dark' ? '#0f0f0f' : '#ffffff',
+            pointHoverBorderWidth: 2
         };
     });
 
@@ -1838,7 +1895,19 @@ function renderZoomedChart(chartData, currentData) {
             maintainAspectRatio: false,
             plugins: {
                 legend: { display: false },
-                tooltip: { enabled: false }
+                tooltip: {
+                    enabled: true,
+                    displayColors: true,
+                    callbacks: {
+                        title: function(items) {
+                            if (!items || items.length === 0) return '';
+                            return indexToLabel.get(Math.round(items[0].parsed.x)) || 'Latest';
+                        },
+                        label: function(context) {
+                            return `${context.dataset.label}: ${formatSignedPercentValue(context.parsed.y)}`;
+                        }
+                    }
+                }
             },
             interaction: { intersect: false, mode: 'nearest' },
             scales: {
@@ -1884,13 +1953,12 @@ function renderZoomedChart(chartData, currentData) {
                 }
             },
             layout: {
-                padding: { right: isMobile ? 8 : 16, left: isMobile ? 0 : 8, top: 8, bottom: 4 }
+                padding: { right: isMobile ? 54 : 96, left: isMobile ? 0 : 8, top: 8, bottom: 4 }
             }
         },
         plugins: [{
             id: 'zoomedLabels',
             afterDatasetsDraw: (chart) => {
-                if (window.innerWidth < 768) return;
                 const chartCtx = chart.ctx;
                 const chartArea = chart.chartArea;
                 if (!chartArea) return;
@@ -1917,7 +1985,7 @@ function renderZoomedChart(chartData, currentData) {
                     const symbol = labelParts[1] ? labelParts[1].replace(')', '') : '';
                     const ytd = ytdMap[symbol];
                     const ytdStr = ytd !== undefined ? `${ytd >= 0 ? '+' : ''}${ytd.toFixed(1)}%` : '';
-                    const text = `${name} ${symbol} ${ytdStr}`;
+                    const text = isMobile ? `${symbol} ${ytdStr}` : `${name} ${symbol} ${ytdStr}`;
                     const textWidth = chartCtx.measureText(text).width;
 
                     labelData.push({ y: lastPoint.y, text, textWidth, color: dataset.borderColor });
