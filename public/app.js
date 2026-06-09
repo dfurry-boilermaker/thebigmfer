@@ -2002,6 +2002,11 @@ function renderStats(chartData, currentData) {
     // Calculate group stats
     const ytdValues = validStocks.map(s => s.changePercent);
     const avg = ytdValues.reduce((a, b) => a + b, 0) / ytdValues.length;
+    const sortedYtdValues = [...ytdValues].sort((a, b) => a - b);
+    const middleIndex = Math.floor(sortedYtdValues.length / 2);
+    const median = sortedYtdValues.length % 2 === 0
+        ? (sortedYtdValues[middleIndex - 1] + sortedYtdValues[middleIndex]) / 2
+        : sortedYtdValues[middleIndex];
     const variance = ytdValues.reduce((sum, v) => sum + Math.pow(v - avg, 2), 0) / ytdValues.length;
     const stdDev = Math.sqrt(variance);
     const positiveCount = ytdValues.filter(v => v >= 0).length;
@@ -2052,6 +2057,11 @@ function renderStats(chartData, currentData) {
                 <span class="summary-label">Average return</span>
                 <strong>${formatSignedPercentValue(avg)}</strong>
                 <span class="summary-note">${aboveAverageCount}/${validStocks.length} above average</span>
+            </div>
+            <div class="summary-card">
+                <span class="summary-label">Median return</span>
+                <strong>${formatSignedPercentValue(median)}</strong>
+                <span class="summary-note">Middle of the field</span>
             </div>
             <div class="summary-card">
                 <span class="summary-label">Positive picks</span>
