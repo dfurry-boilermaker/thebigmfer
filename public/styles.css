@@ -716,7 +716,7 @@ section h2 {
 
 .analysis-text {
     color: var(--text-secondary);
-    font-size: 0.9375rem;
+    font-size: 1rem;
     line-height: 1.6;
     padding: 0 24px;
     background: transparent;
@@ -735,7 +735,7 @@ section h2 {
     }
 
     .analysis-text {
-        font-size: 0.875rem;
+        font-size: 0.6875rem;
         padding: 0 12px;
         line-height: 1.5;
     }
