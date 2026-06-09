@@ -261,6 +261,29 @@ section h2 {
     height: 100% !important;
 }
 
+.chart-container-zoomed {
+    height: 350px;
+    min-height: 350px;
+}
+
+.chart-section-zoomed h2 {
+    margin-bottom: 16px;
+}
+
+@media (max-width: 768px) {
+    .chart-container-zoomed {
+        height: 320px;
+        min-height: 320px;
+    }
+}
+
+@media (max-width: 480px) {
+    .chart-container-zoomed {
+        height: 300px;
+        min-height: 300px;
+    }
+}
+
 @media (max-width: 768px) {
     .chart-container {
         height: 500px;

@@ -23,6 +23,7 @@ function toggleTheme() {
     // Re-render chart with new theme colors if chart exists
     if (performanceChart && window.lastChartData && window.lastLeaderboardData) {
         renderChart(window.lastChartData, window.lastLeaderboardData);
+        renderZoomedChart(window.lastChartData, window.lastLeaderboardData);
     }
 }
 
@@ -745,7 +746,8 @@ async function loadChart() {
             window.lastChartData = cachedChartData;
             window.lastLeaderboardData = cachedCurrentData;
             renderChart(cachedChartData, cachedCurrentData);
-            
+            renderZoomedChart(cachedChartData, cachedCurrentData);
+
             // Fetch fresh data in background (don't wait for it)
             fetchChartInBackground();
             return;
@@ -764,6 +766,7 @@ async function loadChart() {
             window.lastChartData = cachedChartData;
             window.lastLeaderboardData = cachedCurrentData;
             renderChart(cachedChartData, cachedCurrentData);
+            renderZoomedChart(cachedChartData, cachedCurrentData);
         }
     }
 }
@@ -811,9 +814,10 @@ async function fetchChartData() {
     // Store data for theme switching
     window.lastChartData = chartData;
     window.lastLeaderboardData = currentData;
-    
-    // Render the chart
+
+    // Render the charts
     renderChart(chartData, currentData);
+    renderZoomedChart(chartData, currentData);
 }
 
 async function fetchChartInBackground() {
@@ -833,10 +837,11 @@ async function fetchChartInBackground() {
                 managerAnalyses = extractAnalysesFromLeaderboardData(currentData);
                 renderLeaderboard(currentData);
                 
-                // Re-render chart with fresh data
+                // Re-render charts with fresh data
                 window.lastChartData = chartData;
                 window.lastLeaderboardData = currentData;
                 renderChart(chartData, currentData);
+                renderZoomedChart(chartData, currentData);
                 
                 console.log('Background refresh: chart and leaderboard data updated');
             }
@@ -1667,15 +1672,271 @@ function renderChart(chartData, currentData) {
         });
 }
 
-// Handle window resize
-window.addEventListener('resize', () => {
-    if (performanceChart) {
-        const container = document.getElementById('performanceChart');
-        if (container) {
-            performanceChart.applyOptions({ width: container.clientWidth, height: container.clientHeight });
-        }
+// Zoomed chart showing the middle pack (-35% to +20%)
+let zoomedChart = null;
+
+function renderZoomedChart(chartData, currentData) {
+    const ctx = document.getElementById('zoomedChart');
+    if (!ctx || !chartData || !chartData.data || chartData.data.length === 0) return;
+
+    if (zoomedChart) zoomedChart.destroy();
+
+    const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+    const isMobile = window.innerWidth < 768;
+
+    const ytdMap = {};
+    if (currentData && Array.isArray(currentData)) {
+        currentData.forEach(stock => { ytdMap[stock.symbol] = stock.changePercent; });
     }
-});
+
+    const ZOOM_MIN = -35;
+    const ZOOM_MAX = 20;
+
+    const lightColors = [
+        '#2563eb', '#059669', '#dc2626', '#d97706', '#7c3aed',
+        '#db2777', '#0d9488', '#ea580c', '#16a34a', '#9333ea',
+        '#0284c7', '#ca8a04'
+    ];
+    const darkColors = [
+        '#60a5fa', '#34d399', '#f472b6', '#fbbf24', '#a78bfa',
+        '#fb7185', '#2dd4bf', '#fb923c', '#84cc16', '#c084fc',
+        '#38bdf8', '#facc15'
+    ];
+    const colors = currentTheme === 'dark' ? darkColors : lightColors;
+
+    // Filter to only stocks within the zoomed range
+    const stocksInRange = chartData.data.filter(stock => {
+        const ytd = ytdMap[stock.symbol];
+        return ytd !== undefined && ytd >= ZOOM_MIN && ytd <= ZOOM_MAX;
+    });
+
+    if (stocksInRange.length === 0) return;
+
+    // Build timestamp index (same approach as main chart)
+    const allTimestamps = [];
+    const today = new Date();
+    const todayTimestamp = today.getTime();
+    const firstTradingDay = new Date(2026, 0, 2);
+
+    stocksInRange.forEach(stock => {
+        (stock.timestamps || []).forEach(ts => {
+            if (ts >= firstTradingDay.getTime() && ts <= todayTimestamp && !allTimestamps.includes(ts)) {
+                allTimestamps.push(ts);
+            }
+        });
+    });
+    allTimestamps.sort((a, b) => a - b);
+
+    const tsToIndex = new Map();
+    const indexToLabel = new Map();
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    allTimestamps.forEach((ts, idx) => {
+        tsToIndex.set(ts, idx);
+        const d = new Date(ts);
+        indexToLabel.set(idx, `${monthNames[d.getMonth()]} ${d.getDate()}`);
+    });
+
+    // Find original index in chartData.data for color matching
+    const originalIndices = stocksInRange.map(stock =>
+        chartData.data.findIndex(s => s.symbol === stock.symbol)
+    );
+
+    const datasets = stocksInRange.map((stock, i) => {
+        const origIdx = originalIndices[i];
+        const color = colors[origIdx % colors.length];
+        const data = stock.data || [];
+        const timestamps = stock.timestamps || [];
+
+        const timeData = data.map((value, idx) => {
+            const ts = timestamps[idx];
+            if (!ts || ts < firstTradingDay.getTime() || ts > todayTimestamp) return null;
+            const xIdx = tsToIndex.get(ts);
+            if (xIdx === undefined) return null;
+            return { x: xIdx, y: value };
+        }).filter(p => p !== null);
+
+        // Override last point with current YTD
+        const ytd = ytdMap[stock.symbol];
+        if (timeData.length > 0 && ytd !== undefined) {
+            timeData[timeData.length - 1].y = ytd;
+        }
+
+        return {
+            label: `${stock.name} (${stock.symbol})`,
+            data: timeData,
+            borderColor: color,
+            backgroundColor: color,
+            borderWidth: isMobile ? 1.5 : 2,
+            fill: false,
+            tension: 0.1,
+            pointRadius: 0,
+            pointHoverRadius: 0
+        };
+    });
+
+    const validDatasets = datasets.filter(d => d.data.length > 0);
+    if (validDatasets.length === 0) return;
+
+    let maxIndex = 0;
+    validDatasets.forEach(ds => {
+        ds.data.forEach(p => { if (p.x > maxIndex) maxIndex = p.x; });
+    });
+
+    zoomedChart = new Chart(ctx, {
+        type: 'line',
+        data: { datasets: validDatasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { enabled: false }
+            },
+            interaction: { intersect: false, mode: 'nearest' },
+            scales: {
+                y: {
+                    min: ZOOM_MIN,
+                    max: ZOOM_MAX,
+                    title: { display: false },
+                    ticks: {
+                        callback: function(value) {
+                            return (value > 0 ? '+' : '') + value + '%';
+                        },
+                        color: currentTheme === 'dark' ? 'rgba(255,255,255,0.4)' : '#aaaaaa',
+                        font: { size: isMobile ? 9 : 11, weight: '400' },
+                        padding: isMobile ? 6 : 10
+                    },
+                    grid: {
+                        color: (ctx) => {
+                            if (ctx.tick.value === 0) return currentTheme === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)';
+                            return currentTheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+                        },
+                        lineWidth: (ctx) => ctx.tick.value === 0 ? 1.5 : 1,
+                        drawBorder: false
+                    }
+                },
+                x: {
+                    type: 'linear',
+                    min: -0.5,
+                    max: maxIndex + 0.5,
+                    display: true,
+                    grid: { display: false },
+                    ticks: {
+                        display: true,
+                        maxTicksLimit: isMobile ? 4 : 6,
+                        autoSkip: true,
+                        color: currentTheme === 'dark' ? 'rgba(255,255,255,0.4)' : '#aaaaaa',
+                        font: { size: isMobile ? 9 : 11, weight: '400' },
+                        maxRotation: 0,
+                        padding: isMobile ? 6 : 10,
+                        callback: function(value) {
+                            return indexToLabel.get(Math.round(value)) || '';
+                        }
+                    }
+                }
+            },
+            layout: {
+                padding: { right: isMobile ? 8 : 16, left: isMobile ? 0 : 8, top: 8, bottom: 4 }
+            }
+        },
+        plugins: [{
+            id: 'zoomedLabels',
+            afterDatasetsDraw: (chart) => {
+                const chartCtx = chart.ctx;
+                const chartArea = chart.chartArea;
+                if (!chartArea) return;
+
+                const fontSize = isMobile
+                    ? '500 7px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+                    : '500 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                const lineHeight = isMobile ? 10 : 14;
+                const padding = isMobile ? 2 : 3;
+                const labelTheme = document.documentElement.getAttribute('data-theme') || 'light';
+
+                chartCtx.font = fontSize;
+                chartCtx.textBaseline = 'middle';
+
+                const labelData = [];
+                chart.data.datasets.forEach((dataset, i) => {
+                    const meta = chart.getDatasetMeta(i);
+                    if (!meta || meta.hidden || !meta.data || meta.data.length === 0) return;
+                    const lastPoint = meta.data[meta.data.length - 1];
+                    if (!lastPoint) return;
+
+                    const labelParts = dataset.label.split(' (');
+                    const name = labelParts[0];
+                    const symbol = labelParts[1] ? labelParts[1].replace(')', '') : '';
+                    const ytd = ytdMap[symbol];
+                    const ytdStr = ytd !== undefined ? `${ytd >= 0 ? '+' : ''}${ytd.toFixed(1)}%` : '';
+                    const text = `${name} ${ytdStr}`;
+                    const textWidth = chartCtx.measureText(text).width;
+
+                    labelData.push({ y: lastPoint.y, text, textWidth, color: dataset.borderColor });
+                });
+
+                if (labelData.length === 0) return;
+
+                // Cluster collision resolution
+                const minSpacing = lineHeight + (isMobile ? 1 : 2);
+                const topBound = chartArea.top + lineHeight / 2 + 2;
+                const bottomBound = chartArea.bottom - lineHeight / 2 - 2;
+
+                labelData.sort((a, b) => a.y - b.y);
+
+                const clusters = [];
+                let cluster = [labelData[0]];
+                for (let i = 1; i < labelData.length; i++) {
+                    if (labelData[i].y - cluster[cluster.length - 1].y < minSpacing) {
+                        cluster.push(labelData[i]);
+                    } else {
+                        clusters.push(cluster);
+                        cluster = [labelData[i]];
+                    }
+                }
+                clusters.push(cluster);
+
+                clusters.forEach(group => {
+                    if (group.length === 1) return;
+                    const center = group.reduce((s, l) => s + l.y, 0) / group.length;
+                    const totalH = (group.length - 1) * minSpacing;
+                    let start = center - totalH / 2;
+                    if (start < topBound) start = topBound;
+                    if (start + totalH > bottomBound) start = bottomBound - totalH;
+                    group.forEach((l, i) => { l.y = start + i * minSpacing; });
+                });
+
+                labelData.forEach(l => { l.y = Math.max(topBound, Math.min(bottomBound, l.y)); });
+
+                const rightEdge = chartArea.right - 4;
+                labelData.forEach(label => {
+                    const rectWidth = label.textWidth + padding * 2;
+                    const rectX = rightEdge - rectWidth;
+
+                    chartCtx.save();
+                    chartCtx.font = fontSize;
+                    chartCtx.textAlign = 'left';
+                    chartCtx.textBaseline = 'middle';
+
+                    chartCtx.fillStyle = labelTheme === 'dark' ? 'rgba(15,15,15,0.85)' : 'rgba(255,255,255,0.88)';
+                    chartCtx.beginPath();
+                    chartCtx.roundRect(rectX, label.y - lineHeight / 2, rectWidth, lineHeight, isMobile ? 3 : 4);
+                    chartCtx.fill();
+
+                    chartCtx.fillStyle = label.color;
+                    chartCtx.beginPath();
+                    chartCtx.roundRect(rectX, label.y - lineHeight / 2, isMobile ? 2 : 3, lineHeight, [isMobile ? 3 : 4, 0, 0, isMobile ? 3 : 4]);
+                    chartCtx.fill();
+
+                    chartCtx.fillStyle = labelTheme === 'dark' ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.8)';
+                    chartCtx.fillText(label.text, rectX + padding + (isMobile ? 3 : 4), label.y);
+                    chartCtx.restore();
+                });
+            }
+        }]
+    });
+}
+
+// Handle window resize (Chart.js responsive:true handles it)
 
 // Check if US stock market is currently open (client-side check)
 function isMarketOpen() {
