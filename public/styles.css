@@ -342,7 +342,7 @@ section h2 {
 
 .pack-race-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    grid-template-columns: 1fr;
     gap: 1px;
     background: var(--border-color);
     border: 1px solid var(--border-color);
@@ -350,10 +350,11 @@ section h2 {
 
 .pack-race-card {
     background: var(--bg-secondary);
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+    padding: 8px 10px;
+    display: grid;
+    grid-template-columns: minmax(150px, 1.1fr) minmax(120px, 0.8fr) minmax(250px, 1.4fr);
+    align-items: center;
+    gap: 12px;
 }
 
 .pack-race-card.pack-leader {
@@ -362,20 +363,20 @@ section h2 {
 
 .pack-race-header {
     display: grid;
-    grid-template-columns: 8px 32px minmax(0, 1fr) auto;
+    grid-template-columns: 8px 28px minmax(0, 1fr) auto;
     align-items: center;
     gap: 8px;
 }
 
 .pack-color {
     width: 8px;
-    height: 28px;
+    height: 24px;
     display: block;
 }
 
 .pack-race-rank {
     color: var(--text-tertiary);
-    font-size: 0.75rem;
+    font-size: 0.6875rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
 }
@@ -388,7 +389,7 @@ section h2 {
 }
 
 .pack-race-ytd {
-    font-size: 0.9375rem;
+    font-size: 0.8125rem;
     font-weight: 800;
     font-variant-numeric: tabular-nums;
 }
@@ -400,12 +401,12 @@ section h2 {
     white-space: nowrap;
     color: var(--text-primary);
     font-weight: 600;
-    font-size: 0.9375rem;
+    font-size: 0.8125rem;
 }
 
 .pack-symbol {
     color: var(--text-tertiary);
-    font-size: 0.75rem;
+    font-size: 0.6875rem;
 }
 
 .pack-race-ytd.positive {
@@ -417,12 +418,12 @@ section h2 {
 }
 
 .pack-race-spark {
-    height: 42px;
+    height: 28px;
 }
 
 .pack-sparkline {
     width: 100%;
-    height: 42px;
+    height: 28px;
     display: block;
     overflow: visible;
 }
@@ -436,22 +437,23 @@ section h2 {
 .pack-race-metrics {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
+    gap: 6px;
 }
 
 .pack-race-metrics span {
     min-width: 0;
     display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 7px 8px;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 4px;
+    padding: 0;
     background: var(--bg-primary);
-    border: 1px solid var(--border-light);
+    border: none;
 }
 
 .pack-race-metrics strong {
     color: var(--text-primary);
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     font-weight: 700;
     line-height: 1;
     font-variant-numeric: tabular-nums;
@@ -459,7 +461,7 @@ section h2 {
 
 .pack-race-metrics small {
     color: var(--text-tertiary);
-    font-size: 0.5625rem;
+    font-size: 0.5rem;
     font-weight: 600;
     letter-spacing: 0.05em;
     text-transform: uppercase;
@@ -496,24 +498,20 @@ section h2 {
     }
 
     .pack-race-card {
-        padding: 10px;
-        gap: 8px;
+        padding: 8px;
+        grid-template-columns: 1fr;
+        gap: 6px;
     }
 
     .pack-race-header {
         grid-template-columns: 8px 28px minmax(0, 1fr) auto;
     }
 
-    .pack-race-ytd {
-        font-size: 0.8125rem;
-    }
-
-    .pack-name {
-        font-size: 0.8125rem;
-    }
-
     .pack-race-metrics span {
-        padding: 6px 7px;
+        padding: 5px 6px;
+        border: 1px solid var(--border-light);
+        flex-direction: column;
+        align-items: flex-start;
     }
 }
 
