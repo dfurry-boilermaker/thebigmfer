@@ -3,17 +3,9 @@ const fs = require('fs');
 const YahooFinance = require('yahoo-finance2').default;
 const yahooFinance = new YahooFinance();
 
-// Vercel KV (Redis) for persistent cache across cold starts.
-// Falls back to in-memory when KV env vars aren't set (local dev without credentials).
-let kv = null;
-if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
-    try {
-        const kvModule = '@vercel/kv';
-        kv = require(kvModule).kv;
-    } catch (e) {
-        kv = null;
-    }
-}
+// In-memory cache (persists within a single serverless instance).
+// On cold start the cron job repopulates within 15 minutes.
+const kv = null;
 
 // In-memory fallback for local dev (or when KV is unavailable)
 const memoryCache = {};
