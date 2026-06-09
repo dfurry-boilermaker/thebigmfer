@@ -22,7 +22,7 @@ function toggleTheme() {
     
     // Re-render chart with new theme colors if chart exists
     if (performanceChart && window.lastChartData && window.lastLeaderboardData) {
-        renderChart(window.lastChartData, window.lastLeaderboardData);
+        renderChart(window.lastChartData, window.lastLeaderboardData);\n        renderSparklineGrid(window.lastChartData, window.lastLeaderboardData);
     }
 }
 
@@ -745,7 +745,8 @@ async function loadChart() {
             window.lastChartData = cachedChartData;
             window.lastLeaderboardData = cachedCurrentData;
             renderChart(cachedChartData, cachedCurrentData);
-            
+            renderSparklineGrid(cachedChartData, cachedCurrentData);
+
             // Fetch fresh data in background (don't wait for it)
             fetchChartInBackground();
             return;
@@ -764,6 +765,7 @@ async function loadChart() {
             window.lastChartData = cachedChartData;
             window.lastLeaderboardData = cachedCurrentData;
             renderChart(cachedChartData, cachedCurrentData);
+            renderSparklineGrid(cachedChartData, cachedCurrentData);
         }
     }
 }
@@ -812,8 +814,9 @@ async function fetchChartData() {
     window.lastChartData = chartData;
     window.lastLeaderboardData = currentData;
     
-    // Render the chart
+    // Render the chart and sparklines
     renderChart(chartData, currentData);
+    renderSparklineGrid(chartData, currentData);
 }
 
 async function fetchChartInBackground() {
@@ -833,11 +836,12 @@ async function fetchChartInBackground() {
                 managerAnalyses = extractAnalysesFromLeaderboardData(currentData);
                 renderLeaderboard(currentData);
                 
-                // Re-render chart with fresh data
+                // Re-render chart and sparklines with fresh data
                 window.lastChartData = chartData;
                 window.lastLeaderboardData = currentData;
                 renderChart(chartData, currentData);
-                
+                renderSparklineGrid(chartData, currentData);
+
                 console.log('Background refresh: chart and leaderboard data updated');
             }
         }
@@ -1665,6 +1669,122 @@ function renderChart(chartData, currentData) {
                 }
             }]
         });
+}
+
+// Render sparkline grid from chart data
+function renderSparklineGrid(chartData, currentData) {
+    const grid = document.getElementById('sparklineGrid');
+    if (!grid || !chartData || !chartData.data) return;
+
+    const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+
+    const ytdMap = {};
+    const priceMap = {};
+    if (currentData && Array.isArray(currentData)) {
+        currentData.forEach(stock => {
+            ytdMap[stock.symbol] = stock.changePercent;
+            priceMap[stock.symbol] = stock.currentPrice;
+        });
+    }
+
+    const sorted = [...chartData.data].sort((a, b) => {
+        const aYtd = ytdMap[a.symbol] || 0;
+        const bYtd = ytdMap[b.symbol] || 0;
+        return bYtd - aYtd;
+    });
+
+    grid.innerHTML = sorted.map((stock, i) => {
+        const ytd = ytdMap[stock.symbol];
+        const price = priceMap[stock.symbol];
+        const ytdClass = ytd >= 0 ? 'positive' : 'negative';
+        const ytdFormatted = ytd !== null && ytd !== undefined
+            ? `${ytd >= 0 ? '+' : ''}${ytd.toFixed(1)}%`
+            : '-';
+        const priceFormatted = price ? `$${formatPrice(price)}` : '-';
+
+        return `
+            <div class="sparkline-card">
+                <div class="sparkline-card-header">
+                    <span class="sparkline-card-name">${escapeHtml(stock.name)}</span>
+                    <span class="sparkline-card-symbol">${escapeHtml(stock.symbol)}</span>
+                </div>
+                <div class="sparkline-canvas-wrapper">
+                    <canvas id="sparkline-${i}" data-stock-index="${i}"></canvas>
+                </div>
+                <div class="sparkline-card-footer">
+                    <span class="sparkline-card-price">${priceFormatted}</span>
+                    <span class="sparkline-card-ytd ${ytdClass}">${ytdFormatted}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    sorted.forEach((stock, i) => {
+        const canvas = document.getElementById(`sparkline-${i}`);
+        if (!canvas || !stock.data || stock.data.length < 2) return;
+
+        const wrapper = canvas.parentElement;
+        const dpr = window.devicePixelRatio || 1;
+        const w = wrapper.clientWidth;
+        const h = wrapper.clientHeight;
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        canvas.style.width = w + 'px';
+        canvas.style.height = h + 'px';
+
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+
+        const data = stock.data;
+        const min = Math.min(...data);
+        const max = Math.max(...data);
+        const range = max - min || 1;
+        const padY = 2;
+        const drawH = h - padY * 2;
+
+        const ytd = ytdMap[stock.symbol] || 0;
+        const isPositive = ytd >= 0;
+        const lineColor = isPositive
+            ? (currentTheme === 'dark' ? '#4ade80' : '#10b981')
+            : (currentTheme === 'dark' ? '#f87171' : '#ef4444');
+        const fillColor = isPositive
+            ? (currentTheme === 'dark' ? 'rgba(74, 222, 128, 0.08)' : 'rgba(16, 185, 129, 0.06)')
+            : (currentTheme === 'dark' ? 'rgba(248, 113, 113, 0.08)' : 'rgba(239, 68, 68, 0.06)');
+
+        const points = data.map((val, idx) => ({
+            x: (idx / (data.length - 1)) * w,
+            y: padY + drawH - ((val - min) / range) * drawH
+        }));
+
+        // Fill area under the line
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, h);
+        points.forEach(p => ctx.lineTo(p.x, p.y));
+        ctx.lineTo(points[points.length - 1].x, h);
+        ctx.closePath();
+        ctx.fillStyle = fillColor;
+        ctx.fill();
+
+        // Draw the line
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let j = 1; j < points.length; j++) {
+            const prev = points[j - 1];
+            const curr = points[j];
+            const cpx = (prev.x + curr.x) / 2;
+            ctx.bezierCurveTo(cpx, prev.y, cpx, curr.y, curr.x, curr.y);
+        }
+        ctx.strokeStyle = lineColor;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // End dot
+        const last = points[points.length - 1];
+        ctx.beginPath();
+        ctx.arc(last.x - 1, last.y, 2, 0, Math.PI * 2);
+        ctx.fillStyle = lineColor;
+        ctx.fill();
+    });
 }
 
 // Handle window resize
