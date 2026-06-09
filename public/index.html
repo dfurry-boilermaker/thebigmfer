@@ -10,6 +10,8 @@
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
     <!-- Vercel Web Analytics -->
     <script>
       window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
@@ -47,6 +49,15 @@
         <div class="main-content">
             <!-- Performance Chart -->
             <section class="chart-section">
+                <div class="chart-controls">
+                    <div class="time-range-toggles">
+                        <button class="time-range-btn" data-range="1W">1W</button>
+                        <button class="time-range-btn" data-range="1M">1M</button>
+                        <button class="time-range-btn" data-range="3M">3M</button>
+                        <button class="time-range-btn active" data-range="YTD">YTD</button>
+                    </div>
+                    <button class="chart-reset-zoom" id="resetZoom">Reset Zoom</button>
+                </div>
                 <div class="chart-container">
                     <canvas id="performanceChart"></canvas>
                 </div>

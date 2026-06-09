@@ -6,6 +6,24 @@ const indexes = document.getElementById('indexes');
 let performanceChart = null;
 let managerAnalyses = {}; // Cache for manager analyses
 
+// Chart interaction state
+let activeTimeRange = 'YTD';
+let isolatedDatasetIndex = null;
+let chartTooltipEl = null;
+let globalIndexToDateLabel = new Map();
+
+// Register zoom plugin
+if (typeof ChartZoom !== 'undefined') {
+    Chart.register(ChartZoom);
+}
+
+function hexToRgba(hex, alpha) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 // Theme Management
 function initTheme() {
     const savedTheme = localStorage.getItem('theme') || 'light';
@@ -22,7 +40,8 @@ function toggleTheme() {
     
     // Re-render chart with new theme colors if chart exists
     if (performanceChart && window.lastChartData && window.lastLeaderboardData) {
-        renderChart(window.lastChartData, window.lastLeaderboardData);\n        renderSparklineGrid(window.lastChartData, window.lastLeaderboardData);
+        renderChart(window.lastChartData, window.lastLeaderboardData);
+        renderSparklineGrid(window.lastChartData, window.lastLeaderboardData);
     }
 }
 
@@ -37,6 +56,30 @@ document.addEventListener('DOMContentLoaded', () => {
     const themeToggle = document.getElementById('themeToggle');
     if (themeToggle) {
         themeToggle.addEventListener('click', toggleTheme);
+    }
+
+    // Time range toggles
+    document.querySelectorAll('.time-range-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.time-range-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            activeTimeRange = btn.dataset.range;
+            if (window.lastChartData && window.lastLeaderboardData) {
+                renderChart(window.lastChartData, window.lastLeaderboardData);
+                renderSparklineGrid(window.lastChartData, window.lastLeaderboardData);
+            }
+        });
+    });
+
+    // Reset zoom button
+    const resetBtn = document.getElementById('resetZoom');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+            if (performanceChart) {
+                performanceChart.resetZoom();
+                resetBtn.classList.remove('visible');
+            }
+        });
     }
 });
 
@@ -850,7 +893,112 @@ async function fetchChartInBackground() {
     }
 }
 
+// Time range filtering (client-side)
+function filterDataByTimeRange(chartData, range) {
+    if (range === 'YTD' || !chartData || !chartData.data) return chartData;
+    const now = Date.now();
+    let cutoffMs;
+    switch (range) {
+        case '1W': cutoffMs = now - 7 * 24 * 60 * 60 * 1000; break;
+        case '1M': cutoffMs = now - 30 * 24 * 60 * 60 * 1000; break;
+        case '3M': cutoffMs = now - 90 * 24 * 60 * 60 * 1000; break;
+        default: return chartData;
+    }
+    const filteredData = chartData.data.map(stock => {
+        const timestamps = stock.timestamps || [];
+        const data = stock.data || [];
+        const indices = [];
+        for (let i = 0; i < timestamps.length; i++) {
+            if (timestamps[i] >= cutoffMs) indices.push(i);
+        }
+        return { ...stock, data: indices.map(i => data[i]), timestamps: indices.map(i => timestamps[i]) };
+    });
+    return { ...chartData, data: filteredData };
+}
+
+// External tooltip handler
+function externalTooltipHandler(context) {
+    const { chart, tooltip } = context;
+    if (!chartTooltipEl) {
+        chartTooltipEl = document.createElement('div');
+        chartTooltipEl.className = 'chart-tooltip';
+        document.querySelector('.chart-container').appendChild(chartTooltipEl);
+    }
+    if (tooltip.opacity === 0) {
+        chartTooltipEl.classList.remove('visible');
+        return;
+    }
+    if (tooltip.dataPoints && tooltip.dataPoints.length > 0) {
+        const xValue = tooltip.dataPoints[0].parsed.x;
+        const dateLabel = globalIndexToDateLabel.get(Math.round(xValue)) || '';
+        let html = `<div class="chart-tooltip-date">${dateLabel}</div>`;
+        const sorted = [...tooltip.dataPoints].sort((a, b) => b.parsed.y - a.parsed.y);
+        sorted.forEach(point => {
+            const value = point.parsed.y;
+            const sign = value >= 0 ? '+' : '';
+            const cls = value >= 0 ? 'positive' : 'negative';
+            const name = point.dataset.label.split(' (')[0];
+            const color = point.dataset._originalColor || point.dataset.borderColor;
+            html += `<div class="chart-tooltip-row"><span class="chart-tooltip-dot" style="background:${color}"></span><span class="chart-tooltip-name">${name}</span><span class="chart-tooltip-value ${cls}">${sign}${value.toFixed(1)}%</span></div>`;
+        });
+        chartTooltipEl.innerHTML = html;
+    }
+    const chartRect = chart.canvas.parentElement.getBoundingClientRect();
+    const tooltipWidth = chartTooltipEl.offsetWidth;
+    let left = tooltip.caretX + 12;
+    if (left + tooltipWidth > chartRect.width - 10) left = tooltip.caretX - tooltipWidth - 12;
+    chartTooltipEl.style.left = Math.max(0, left) + 'px';
+    chartTooltipEl.style.top = Math.max(0, tooltip.caretY - 20) + 'px';
+    chartTooltipEl.classList.add('visible');
+}
+
+// Crosshair plugin
+const crosshairPlugin = {
+    id: 'crosshair',
+    afterDraw: (chart) => {
+        if (chart.tooltip && chart.tooltip._active && chart.tooltip._active.length > 0) {
+            const ctx = chart.ctx;
+            const x = chart.tooltip._active[0].element.x;
+            const top = chart.chartArea.top;
+            const bottom = chart.chartArea.bottom;
+            const theme = document.documentElement.getAttribute('data-theme') || 'light';
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(x, top);
+            ctx.lineTo(x, bottom);
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = theme === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)';
+            ctx.setLineDash([4, 4]);
+            ctx.stroke();
+            ctx.restore();
+        }
+    }
+};
+
+// Dark mode glow plugin
+const glowPlugin = {
+    id: 'lineGlow',
+    beforeDatasetDraw: (chart, args) => {
+        const theme = document.documentElement.getAttribute('data-theme') || 'light';
+        if (theme !== 'dark') return;
+        const ctx = chart.ctx;
+        ctx.save();
+        ctx.shadowColor = args.meta.dataset.options.borderColor;
+        ctx.shadowBlur = 3;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+    },
+    afterDatasetDraw: (chart, args) => {
+        const theme = document.documentElement.getAttribute('data-theme') || 'light';
+        if (theme !== 'dark') return;
+        chart.ctx.restore();
+    }
+};
+
 function renderChart(chartData, currentData) {
+    // Apply time range filter
+    const filteredChartData = filterDataByTimeRange(chartData, activeTimeRange);
+
     // Create a map of symbol to YTD percentage for quick lookup
     const ytdMap = {};
     if (currentData && Array.isArray(currentData)) {
@@ -869,9 +1017,9 @@ function renderChart(chartData, currentData) {
         performanceChart.destroy();
     }
     
-    // Validate chartData
-    if (!chartData || !chartData.data || !Array.isArray(chartData.data) || chartData.data.length === 0) {
-        console.error('Invalid chartData:', chartData);
+    // Validate data
+    if (!filteredChartData || !filteredChartData.data || !Array.isArray(filteredChartData.data) || filteredChartData.data.length === 0) {
+        console.error('Invalid chartData:', filteredChartData);
         return;
     }
 
@@ -920,7 +1068,7 @@ function renderChart(chartData, currentData) {
     const isMobile = window.innerWidth < 768;
     
     // Get labels from backend
-    const labels = chartData.months || [];
+    const labels = filteredChartData.months || [];
     
     // Calculate dates for all data points (constant time frame)
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -959,7 +1107,7 @@ function renderChart(chartData, currentData) {
     
     // Calculate daily data count
     const baselineCount = 1;
-    const dataLengths = chartData.data.map(d => (d.data || []).length);
+    const dataLengths = filteredChartData.data.map(d => (d.data || []).length);
     const maxDataPoints = dataLengths.length > 0 ? Math.max(...dataLengths) : 0;
     
     // Early return if there's no data to render
@@ -1218,7 +1366,7 @@ function renderChart(chartData, currentData) {
     const todayTimestamp = today.getTime();
     
     const allUniqueTimestamps = [];
-    chartData.data.forEach(stock => {
+    filteredChartData.data.forEach(stock => {
         const timestamps = stock.timestamps || [];
         timestamps.forEach((ts, idx) => {
             // Only include timestamps from Jan 2, 2026 up to today (no future dates)
@@ -1246,8 +1394,9 @@ function renderChart(chartData, currentData) {
         const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         indexToDateLabel.set(idx, `${monthNames[date.getMonth()]} ${date.getDate()}`);
     });
+    globalIndexToDateLabel = indexToDateLabel;
     
-    const datasets = chartData.data.map((stock, index) => {
+    const datasets = filteredChartData.data.map((stock, index) => {
         // Check for custom color first, then fall back to index-based assignment
         const color = managerColors[stock.name] || colors[index % colors.length];
         const data = stock.data || [];
@@ -1345,16 +1494,16 @@ function renderChart(chartData, currentData) {
             label: `${stock.name} (${stock.symbol})`,
             data: timeData,
             borderColor: color,
-            backgroundColor: color,
-            borderWidth: isMobile ? 1.5 : 2,
-            fill: false,
+            backgroundColor: hexToRgba(color, 0.06),
+            borderWidth: isMobile ? 1.5 : 1.75,
+            fill: true,
             tension: adaptiveTension,
             pointRadius: 0,
-            pointHoverRadius: 0,
-            pointBackgroundColor: color,
-            pointBorderColor: '#ffffff',
-            pointBorderWidth: 0,
-            pointHoverBorderWidth: 0
+            pointHoverRadius: 4,
+            pointHoverBackgroundColor: color,
+            pointHoverBorderColor: currentTheme === 'dark' ? '#1a1a1a' : '#ffffff',
+            pointHoverBorderWidth: 2,
+            _originalColor: color
         };
     });
 
@@ -1440,41 +1589,53 @@ function renderChart(chartData, currentData) {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                animation: {
+                    duration: 800,
+                    easing: 'easeOutQuart',
+                    delay: (ctx) => ctx.type === 'data' && ctx.mode === 'default' ? ctx.datasetIndex * 50 : 0
+                },
                 plugins: {
                     title: {
-                        display: true,
-                        text: 'YTD Performance',
-                        position: 'top',
-                        align: 'start',
-                        fullSize: true,
-                        color: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.5)' : '#999999',
-                        font: {
-                            size: isMobile ? 10 : 11,
-                            weight: '500',
-                            family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-                        },
-                        padding: {
-                            top: 0,
-                            bottom: isMobile ? 4 : 8
-                        }
+                        display: false
                     },
                     legend: {
                         display: false
                     },
                     tooltip: {
-                        enabled: false
+                        enabled: false,
+                        mode: 'index',
+                        intersect: false,
+                        external: externalTooltipHandler
+                    },
+                    zoom: {
+                        pan: {
+                            enabled: true,
+                            mode: 'x'
+                        },
+                        zoom: {
+                            wheel: { enabled: true, modifierKey: 'ctrl' },
+                            pinch: { enabled: true },
+                            drag: { enabled: false },
+                            mode: 'x',
+                            onZoomComplete: () => {
+                                const btn = document.getElementById('resetZoom');
+                                if (btn) btn.classList.add('visible');
+                            }
+                        },
+                        limits: {
+                            x: { min: 'original', max: 'original' }
+                        }
                     }
                 },
                 interaction: {
                     intersect: false,
-                    mode: 'nearest'
+                    mode: 'index',
+                    axis: 'x'
                 },
                 scales: {
                     y: {
                         beginAtZero: false,
-                        title: {
-                            display: false
-                        },
+                        title: { display: false },
                         ticks: {
                             maxTicksLimit: isMobile ? 6 : 8,
                             callback: function(value) {
@@ -1482,15 +1643,17 @@ function renderChart(chartData, currentData) {
                                 return sign + value.toFixed(0) + '%';
                             },
                             color: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.4)' : '#aaaaaa',
-                            font: {
-                                size: isMobile ? 9 : 11,
-                                weight: '400'
-                            },
+                            font: { size: isMobile ? 9 : 11, weight: '400' },
                             padding: isMobile ? 6 : 10
                         },
                         grid: {
-                            color: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
-                            lineWidth: 1,
+                            color: (ctx) => {
+                                if (ctx.tick.value === 0) {
+                                    return currentTheme === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)';
+                                }
+                                return currentTheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+                            },
+                            lineWidth: (ctx) => ctx.tick.value === 0 ? 1.5 : 1,
                             drawBorder: false
                         }
                     },
@@ -1499,30 +1662,22 @@ function renderChart(chartData, currentData) {
                         min: minIndex - 0.5,
                         max: maxIndex + 0.5,
                         position: 'bottom',
-                        title: {
-                            display: false
-                        },
+                        title: { display: false },
                         display: true,
-                        grid: {
-                            display: false
-                        },
+                        grid: { display: false },
                         ticks: {
                             display: true,
                             maxTicksLimit: isMobile ? 4 : 6,
                             autoSkip: true,
                             autoSkipPadding: isMobile ? 15 : 20,
                             color: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.4)' : '#aaaaaa',
-                            font: {
-                                size: isMobile ? 9 : 11,
-                                weight: '400'
-                            },
+                            font: { size: isMobile ? 9 : 11, weight: '400' },
                             maxRotation: 0,
                             minRotation: 0,
                             padding: isMobile ? 6 : 10,
-                            callback: function(value, index, ticks) {
+                            callback: function(value) {
                                 if (value === null || value === undefined) return '';
-                                const tradingDayIndex = Math.round(value);
-                                return indexToDateLabel.get(tradingDayIndex) || '';
+                                return indexToDateLabel.get(Math.round(value)) || '';
                             }
                         }
                     }
@@ -1534,15 +1689,9 @@ function renderChart(chartData, currentData) {
                         top: isMobile ? 8 : 16,
                         bottom: isMobile ? 4 : 8
                     }
-                },
-                elements: {
-                    point: {
-                        hoverRadius: 0,
-                        hoverBorderWidth: 0
-                    }
                 }
             },
-            plugins: [{
+            plugins: [crosshairPlugin, glowPlugin, {
                 id: 'lineLabels',
                 afterDatasetsDraw: (chart) => {
                     const ctx = chart.ctx;
@@ -1789,14 +1938,7 @@ function renderSparklineGrid(chartData, currentData) {
 }
 
 // Handle window resize
-window.addEventListener('resize', () => {
-    if (performanceChart) {
-        const container = document.getElementById('performanceChart');
-        if (container) {
-            performanceChart.applyOptions({ width: container.clientWidth, height: container.clientHeight });
-        }
-    }
-});
+// Chart.js handles resize via responsive:true — no manual handler needed
 
 // Check if US stock market is currently open (client-side check)
 function isMarketOpen() {

@@ -232,6 +232,148 @@ section h2 {
     opacity: 0.7;
 }
 
+/* Chart Controls */
+.chart-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.time-range-toggles {
+    display: flex;
+    gap: 2px;
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+    padding: 3px;
+    border: 1px solid var(--border-color);
+}
+
+.time-range-btn {
+    padding: 5px 12px;
+    border: none;
+    background: transparent;
+    color: var(--text-tertiary);
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+}
+
+.time-range-btn:hover {
+    color: var(--text-primary);
+}
+
+.time-range-btn.active {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="dark"] .time-range-btn.active {
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.chart-reset-zoom {
+    padding: 5px 10px;
+    border: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-tertiary);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.chart-reset-zoom.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.chart-reset-zoom:hover {
+    color: var(--text-primary);
+    border-color: var(--text-tertiary);
+}
+
+/* Chart Tooltip */
+.chart-tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.75rem;
+    line-height: 1.6;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    z-index: 100;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+    white-space: nowrap;
+}
+
+[data-theme="dark"] .chart-tooltip {
+    background: #1a1a1a;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.chart-tooltip.visible {
+    opacity: 1;
+}
+
+.chart-tooltip-date {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.chart-tooltip-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 1px 0;
+}
+
+.chart-tooltip-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.chart-tooltip-name {
+    color: var(--text-secondary);
+    flex: 1;
+    min-width: 50px;
+}
+
+.chart-tooltip-value {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.chart-tooltip-value.positive { color: var(--color-positive); }
+.chart-tooltip-value.negative { color: var(--color-negative); }
+
+/* Chart entrance animation */
+.chart-container canvas {
+    animation: chartFadeIn 0.5s ease-out;
+}
+
+@keyframes chartFadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
 /* Chart Section */
 .chart-section {
     margin-bottom: 0;
@@ -278,6 +420,15 @@ section h2 {
         margin-bottom: 20px;
     }
 
+    .chart-controls {
+        margin-bottom: 8px;
+    }
+
+    .time-range-btn {
+        padding: 4px 10px;
+        font-size: 0.6875rem;
+    }
+
     .main-content {
         gap: 32px;
     }
@@ -291,6 +442,20 @@ section h2 {
 
     .chart-section {
         padding: 0;
+    }
+
+    .chart-controls {
+        margin-bottom: 6px;
+    }
+
+    .time-range-btn {
+        padding: 4px 8px;
+        font-size: 0.625rem;
+    }
+
+    .chart-reset-zoom {
+        font-size: 0.625rem;
+        padding: 4px 8px;
     }
 
     .main-content {
