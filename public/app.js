@@ -1476,6 +1476,7 @@ function renderChart(chartData, currentData) {
                             display: false
                         },
                         ticks: {
+                            maxTicksLimit: isMobile ? 6 : 8,
                             callback: function(value) {
                                 const sign = value > 0 ? '+' : '';
                                 return sign + value.toFixed(0) + '%';
@@ -1485,7 +1486,7 @@ function renderChart(chartData, currentData) {
                                 size: isMobile ? 9 : 11,
                                 weight: '400'
                             },
-                            padding: isMobile ? 4 : 8
+                            padding: isMobile ? 6 : 10
                         },
                         grid: {
                             color: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
