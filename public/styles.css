@@ -625,34 +625,32 @@ section h2 {
 .stats-board {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 10px;
 }
 
 .stats-summary {
-    display: grid;
-    grid-template-columns: minmax(220px, 1.2fr) repeat(4, minmax(140px, 1fr));
-    gap: 1px;
-    background: var(--border-color);
-    border: 1px solid var(--border-color);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
 .summary-card {
-    min-height: 104px;
-    padding: 18px 20px;
+    min-height: 0;
+    padding: 8px 10px;
     background: var(--bg-secondary);
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
+    border: 1px solid var(--border-color);
+    display: inline-flex;
+    align-items: baseline;
     gap: 8px;
 }
 
 .summary-card.featured {
-    background: linear-gradient(135deg, var(--positive-bg), var(--bg-secondary) 62%);
+    background: var(--positive-bg);
 }
 
 .summary-label {
     color: var(--text-tertiary);
-    font-size: 0.6875rem;
+    font-size: 0.625rem;
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -660,16 +658,16 @@ section h2 {
 
 .summary-card strong {
     color: var(--text-primary);
-    font-size: 1.35rem;
+    font-size: 0.875rem;
     font-weight: 600;
-    line-height: 1.1;
-    letter-spacing: -0.03em;
+    line-height: 1;
+    letter-spacing: -0.01em;
 }
 
 .summary-value,
 .summary-note {
     color: var(--text-tertiary);
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
 }
 
 .summary-value {
@@ -682,7 +680,7 @@ section h2 {
 
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
     gap: 1px;
     background: var(--border-color);
     border: 1px solid var(--border-color);
@@ -690,10 +688,11 @@ section h2 {
 
 .stat-card {
     background: var(--bg-secondary);
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
+    padding: 10px 12px;
+    display: grid;
+    grid-template-columns: minmax(135px, 1fr) auto;
+    gap: 10px;
+    align-items: center;
     transition: background-color 0.2s ease;
 }
 
@@ -707,42 +706,43 @@ section h2 {
 
 .stat-card-header {
     display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 12px;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
 }
 
 .stat-title {
     display: flex;
     align-items: baseline;
-    gap: 8px;
+    gap: 6px;
     min-width: 0;
 }
 
 .stat-rank {
     color: var(--text-tertiary);
-    font-size: 0.75rem;
+    font-size: 0.6875rem;
     font-weight: 600;
-    min-width: 28px;
+    min-width: 24px;
 }
 
 .stat-card-name {
-    font-size: 0.9375rem;
+    font-size: 0.8125rem;
     font-weight: 600;
     color: var(--text-primary);
 }
 
 .stat-card-symbol {
-    font-size: 0.75rem;
+    font-size: 0.6875rem;
     color: var(--text-tertiary);
 }
 
 .stat-ytd {
     flex-shrink: 0;
-    padding: 5px 8px;
+    padding: 4px 7px;
     background: var(--bg-primary);
     border: 1px solid var(--border-color);
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     font-weight: 700;
     line-height: 1;
     font-variant-numeric: tabular-nums;
@@ -761,29 +761,31 @@ section h2 {
 }
 
 .stat-card-metrics {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    min-width: 0;
 }
 
 .stat-metric {
     display: flex;
-    flex-direction: column;
+    align-items: baseline;
     gap: 4px;
-    padding: 10px;
-    background: var(--bg-primary);
-    border: 1px solid var(--border-light);
+    min-width: 62px;
+    padding: 0;
+    background: transparent;
+    border: none;
 }
 
 .stat-metric-label {
-    font-size: 0.625rem;
+    font-size: 0.5625rem;
     color: var(--text-tertiary);
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
 
 .stat-metric-value {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 600;
     color: var(--text-secondary);
     font-variant-numeric: tabular-nums;
@@ -794,58 +796,69 @@ section h2 {
 
 @media (max-width: 768px) {
     .stats-summary {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
     }
 
     .summary-card {
-        min-height: 92px;
-        padding: 14px;
+        padding: 7px 9px;
     }
 
     .summary-card strong {
-        font-size: 1.1rem;
+        font-size: 0.8125rem;
     }
 
     .stats-grid {
         grid-template-columns: 1fr;
     }
 
-    .stat-card { padding: 14px; }
-    .stat-card-name { font-size: 0.875rem; }
-    .stat-metric-value { font-size: 0.8125rem; }
+    .stat-card {
+        padding: 9px 10px;
+        grid-template-columns: minmax(120px, 1fr) auto;
+    }
+
+    .stat-card-name { font-size: 0.75rem; }
+    .stat-metric-value { font-size: 0.6875rem; }
 }
 
 @media (max-width: 480px) {
-    .stats-summary {
-        grid-template-columns: 1fr;
-    }
-
     .stats-grid {
         grid-template-columns: 1fr;
     }
 
-    .stat-card { padding: 12px; gap: 12px; }
-    .stat-card-header {
-        align-items: flex-start;
+    .stat-card {
+        padding: 8px;
+        grid-template-columns: 1fr;
+        gap: 6px;
     }
+
+    .stat-card-header {
+        align-items: center;
+        justify-content: space-between;
+    }
+
     .stat-title {
         gap: 6px;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
     }
+
     .stat-rank {
-        min-width: auto;
-        font-size: 0.6875rem;
+        min-width: 20px;
+        font-size: 0.625rem;
     }
-    .stat-card-name { font-size: 0.8125rem; }
+
+    .stat-card-name { font-size: 0.6875rem; }
+
     .stat-card-metrics {
-        grid-template-columns: 1fr;
-        gap: 8px;
+        justify-content: space-between;
+        gap: 6px;
     }
+
     .stat-metric {
-        padding: 8px;
+        min-width: auto;
     }
-    .stat-metric-label { font-size: 0.5625rem; }
-    .stat-metric-value { font-size: 0.75rem; }
+
+    .stat-metric-label { font-size: 0.5rem; }
+    .stat-metric-value { font-size: 0.625rem; }
 }
 
 /* Leaderboard */
