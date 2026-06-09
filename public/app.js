@@ -1782,38 +1782,6 @@ function calculateMedian(values) {
     return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
 }
 
-function buildSparkline(values, color) {
-    const cleanValues = values.filter(value => Number.isFinite(value)).slice(-36);
-    if (cleanValues.length < 2) {
-        return `<svg class="pack-sparkline" viewBox="0 0 120 36" aria-hidden="true"></svg>`;
-    }
-
-    let min = Math.min(...cleanValues);
-    let max = Math.max(...cleanValues);
-    const padding = Math.max((max - min) * 0.15, 1);
-    min -= padding;
-    max += padding;
-
-    const points = cleanValues.map((value, index) => {
-        const x = (index / (cleanValues.length - 1)) * 118 + 1;
-        const y = 34 - ((value - min) / (max - min)) * 32;
-        return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(' ');
-
-    let zeroLine = '';
-    if (min < 0 && max > 0) {
-        const zeroY = 34 - ((0 - min) / (max - min)) * 32;
-        zeroLine = `<line x1="0" y1="${zeroY.toFixed(1)}" x2="120" y2="${zeroY.toFixed(1)}" class="pack-sparkline-zero" />`;
-    }
-
-    return `
-        <svg class="pack-sparkline" viewBox="0 0 120 36" aria-hidden="true">
-            ${zeroLine}
-            <polyline points="${points}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
-    `;
-}
-
 function getRecentSeries(stock, ytdMap) {
     const data = Array.isArray(stock.data) ? [...stock.data] : [];
     const timestamps = Array.isArray(stock.timestamps) ? stock.timestamps : [];
@@ -1847,44 +1815,54 @@ function renderPackRace(stocksInRange, ytdMap, currentData, chartData, colors) {
 
     const sortedPack = [...stocksInRange].sort((a, b) => (ytdMap[b.symbol] || 0) - (ytdMap[a.symbol] || 0));
     const packLeadYtd = ytdMap[sortedPack[0].symbol] || 0;
-    const packMedian = calculateMedian(sortedPack.map(stock => ytdMap[stock.symbol]).filter(value => value !== undefined));
+    const packYtdValues = sortedPack.map(stock => ytdMap[stock.symbol]).filter(value => value !== undefined);
+    const packMedian = calculateMedian(packYtdValues);
+    const packMin = Math.min(...packYtdValues);
+    const packMax = Math.max(...packYtdValues);
+    const packRange = Math.max(packMax - packMin, 1);
 
-    const cards = sortedPack.map((stock, index) => {
+    const rows = sortedPack.map((stock, index) => {
         const ytd = ytdMap[stock.symbol];
         const gapToLead = ytd - packLeadYtd;
-        const vsMedian = packMedian !== null ? ytd - packMedian : null;
         const overallRank = overallRanks[stock.symbol] ? `#${overallRanks[stock.symbol]}` : '-';
         const originalIndex = chartData.data.findIndex(item => item.symbol === stock.symbol);
         const color = colors[Math.max(0, originalIndex) % colors.length];
         const series = getRecentSeries(stock, ytdMap);
         const recentMove = series.length > 1 ? series[series.length - 1] - series[series.length - 2] : null;
+        const position = ((ytd - packMin) / packRange) * 100;
 
         return `
-            <article class="pack-race-card ${index === 0 ? 'pack-leader' : ''}">
-                <div class="pack-race-header">
-                    <span class="pack-color" style="background: ${color};"></span>
-                    <span class="pack-race-rank">${overallRank}</span>
-                    <div class="pack-race-title">
+            <div class="pack-ladder-row ${index === 0 ? 'pack-leader' : ''}">
+                <div class="pack-ladder-identity">
+                    <span class="pack-ladder-color" style="background: ${color};"></span>
+                    <span class="pack-ladder-rank">${overallRank}</span>
+                    <span class="pack-ladder-name-wrap">
                         <span class="pack-name">${escapeHtml(stock.name)}</span>
                         <span class="pack-symbol">${escapeHtml(stock.symbol)}</span>
-                    </div>
-                    <span class="pack-race-ytd ${ytd >= 0 ? 'positive' : 'negative'}">${formatSignedPercentValue(ytd)}</span>
+                    </span>
                 </div>
-                <div class="pack-race-spark">
-                    ${buildSparkline(series, color)}
+                <div class="pack-ladder-track" title="${escapeHtml(stock.name)} ${formatSignedPercentValue(ytd)}">
+                    <span class="pack-ladder-dot" style="left: ${position.toFixed(1)}%; background: ${color};"></span>
                 </div>
-                <div class="pack-race-metrics">
-                    <span><strong>${index === 0 ? 'Lead' : `${gapToLead.toFixed(1)} pct pts`}</strong><small>Gap</small></span>
-                    <span><strong>${vsMedian === null ? '-' : formatSignedPercentValue(vsMedian)}</strong><small>vs Median</small></span>
-                    <span><strong>${recentMove === null ? '-' : formatSignedPercentValue(recentMove)}</strong><small>Recent</small></span>
+                <div class="pack-ladder-values">
+                    <span class="pack-ladder-ytd ${ytd >= 0 ? 'positive' : 'negative'}">${formatSignedPercentValue(ytd)}</span>
+                    <span class="pack-ladder-gap">${index === 0 ? 'Lead' : `${gapToLead.toFixed(1)} pct pts`}</span>
+                    <span class="pack-ladder-recent ${recentMove === null ? 'no-data' : recentMove >= 0 ? 'positive' : 'negative'}">${recentMove === null ? '-' : formatSignedPercentValue(recentMove)}</span>
                 </div>
-            </article>
+            </div>
         `;
     }).join('');
 
     container.innerHTML = `
-        <div class="pack-race-grid">
-            ${cards}
+        <div class="pack-ladder">
+            <div class="pack-ladder-scale">
+                <span>${formatSignedPercentValue(packMin)}</span>
+                <span>Median ${packMedian === null ? '-' : formatSignedPercentValue(packMedian)}</span>
+                <span>${formatSignedPercentValue(packMax)}</span>
+            </div>
+            <div class="pack-ladder-list">
+                ${rows}
+            </div>
         </div>
     `;
 }

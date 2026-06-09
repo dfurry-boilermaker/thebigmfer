@@ -340,58 +340,78 @@ section h2 {
     width: 100%;
 }
 
-.pack-race-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 1px;
-    background: var(--border-color);
+.pack-ladder {
     border: 1px solid var(--border-color);
+    background: var(--border-color);
 }
 
-.pack-race-card {
-    background: var(--bg-secondary);
-    padding: 8px 10px;
+.pack-ladder-scale {
     display: grid;
-    grid-template-columns: minmax(150px, 1.1fr) minmax(120px, 0.8fr) minmax(250px, 1.4fr);
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    padding: 7px 10px;
+    background: var(--bg-secondary);
+    color: var(--text-tertiary);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.pack-ladder-scale span:nth-child(2) {
+    text-align: center;
+}
+
+.pack-ladder-scale span:last-child {
+    text-align: right;
+}
+
+.pack-ladder-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.pack-ladder-row {
+    display: grid;
+    grid-template-columns: minmax(150px, 0.9fr) minmax(180px, 1fr) minmax(200px, 0.9fr);
     align-items: center;
     gap: 12px;
+    min-height: 36px;
+    padding: 6px 10px;
+    background: var(--bg-secondary);
 }
 
-.pack-race-card.pack-leader {
-    background: linear-gradient(135deg, var(--positive-bg), var(--bg-secondary) 70%);
+.pack-ladder-row.pack-leader {
+    background: var(--positive-bg);
 }
 
-.pack-race-header {
+.pack-ladder-identity {
     display: grid;
-    grid-template-columns: 8px 28px minmax(0, 1fr) auto;
+    grid-template-columns: 7px 28px minmax(0, 1fr);
     align-items: center;
-    gap: 8px;
+    gap: 7px;
+    min-width: 0;
 }
 
-.pack-color {
-    width: 8px;
-    height: 24px;
+.pack-ladder-color {
+    width: 7px;
+    height: 22px;
     display: block;
 }
 
-.pack-race-rank {
+.pack-ladder-rank {
     color: var(--text-tertiary);
     font-size: 0.6875rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
 }
 
-.pack-race-title {
+.pack-ladder-name-wrap {
     min-width: 0;
     display: flex;
     align-items: baseline;
     gap: 6px;
-}
-
-.pack-race-ytd {
-    font-size: 0.8125rem;
-    font-weight: 800;
-    font-variant-numeric: tabular-nums;
 }
 
 .pack-name {
@@ -409,62 +429,53 @@ section h2 {
     font-size: 0.6875rem;
 }
 
-.pack-race-ytd.positive {
-    color: var(--color-positive);
-}
-
-.pack-race-ytd.negative {
-    color: var(--color-negative);
-}
-
-.pack-race-spark {
-    height: 28px;
-}
-
-.pack-sparkline {
-    width: 100%;
-    height: 28px;
-    display: block;
-    overflow: visible;
-}
-
-.pack-sparkline-zero {
-    stroke: var(--border-color);
-    stroke-width: 1;
-    stroke-dasharray: 3 3;
-}
-
-.pack-race-metrics {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 6px;
-}
-
-.pack-race-metrics span {
-    min-width: 0;
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 4px;
-    padding: 0;
+.pack-ladder-track {
+    position: relative;
+    height: 4px;
     background: var(--bg-primary);
-    border: none;
+    border: 1px solid var(--border-light);
 }
 
-.pack-race-metrics strong {
-    color: var(--text-primary);
-    font-size: 0.75rem;
-    font-weight: 700;
-    line-height: 1;
+.pack-ladder-dot {
+    position: absolute;
+    top: 50%;
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--bg-secondary);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 0 0 1px var(--border-light);
+}
+
+.pack-ladder-values {
+    display: grid;
+    grid-template-columns: 58px minmax(64px, 1fr) 52px;
+    align-items: baseline;
+    gap: 8px;
+    text-align: right;
     font-variant-numeric: tabular-nums;
 }
 
-.pack-race-metrics small {
+.pack-ladder-ytd {
+    font-size: 0.8125rem;
+    font-weight: 800;
+}
+
+.pack-ladder-ytd.positive,
+.pack-ladder-recent.positive {
+    color: var(--color-positive);
+}
+
+.pack-ladder-ytd.negative,
+.pack-ladder-recent.negative {
+    color: var(--color-negative);
+}
+
+.pack-ladder-gap,
+.pack-ladder-recent {
     color: var(--text-tertiary);
-    font-size: 0.5rem;
+    font-size: 0.6875rem;
     font-weight: 600;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
 }
 
 @media (max-width: 768px) {
@@ -493,25 +504,14 @@ section h2 {
         padding: 5px 8px;
     }
 
-    .pack-race-grid {
-        grid-template-columns: 1fr;
+    .pack-ladder-row {
+        grid-template-columns: minmax(120px, 0.9fr) minmax(120px, 1fr) minmax(170px, 0.9fr);
+        gap: 8px;
+        padding: 6px 8px;
     }
 
-    .pack-race-card {
-        padding: 8px;
-        grid-template-columns: 1fr;
-        gap: 6px;
-    }
-
-    .pack-race-header {
-        grid-template-columns: 8px 28px minmax(0, 1fr) auto;
-    }
-
-    .pack-race-metrics span {
-        padding: 5px 6px;
-        border: 1px solid var(--border-light);
-        flex-direction: column;
-        align-items: flex-start;
+    .pack-ladder-scale {
+        padding: 6px 8px;
     }
 }
 
@@ -535,28 +535,32 @@ section h2 {
         font-size: 0.5625rem;
     }
 
-    .pack-race-card {
-        grid-template-columns: minmax(130px, 1fr) auto;
+    .pack-ladder-scale {
+        display: none;
+    }
+
+    .pack-ladder-row {
+        grid-template-columns: minmax(108px, 0.85fr) minmax(72px, 0.7fr) minmax(96px, 0.8fr);
         gap: 6px;
-        padding: 5px 6px;
-        min-height: 34px;
+        min-height: 30px;
+        padding: 4px 6px;
     }
 
-    .pack-race-header {
-        grid-template-columns: 6px 22px minmax(0, 1fr) auto;
-        gap: 6px;
+    .pack-ladder-identity {
+        grid-template-columns: 5px 20px minmax(0, 1fr);
+        gap: 5px;
     }
 
-    .pack-color {
-        width: 6px;
-        height: 22px;
+    .pack-ladder-color {
+        width: 5px;
+        height: 20px;
     }
 
-    .pack-race-rank {
+    .pack-ladder-rank {
         font-size: 0.5625rem;
     }
 
-    .pack-race-title {
+    .pack-ladder-name-wrap {
         gap: 4px;
     }
 
@@ -568,40 +572,29 @@ section h2 {
         font-size: 0.5625rem;
     }
 
-    .pack-race-ytd {
-        font-size: 0.6875rem;
+    .pack-ladder-track {
+        height: 3px;
     }
 
-    .pack-race-spark {
-        display: none;
+    .pack-ladder-dot {
+        width: 9px;
+        height: 9px;
+        border-width: 1px;
     }
 
-    .pack-race-metrics {
-        display: flex;
-        justify-content: flex-end;
-        gap: 6px;
+    .pack-ladder-values {
+        grid-template-columns: 42px 1fr;
+        gap: 5px;
     }
 
-    .pack-race-metrics span {
-        padding: 0;
-        border: none;
-        background: transparent;
-        min-width: auto;
-        display: block;
-    }
-
-    .pack-race-metrics span:nth-child(2) {
-        display: none;
-    }
-
-    .pack-race-metrics strong {
+    .pack-ladder-ytd,
+    .pack-ladder-gap,
+    .pack-ladder-recent {
         font-size: 0.625rem;
     }
 
-    .pack-race-metrics small {
-        display: inline;
-        margin-left: 2px;
-        font-size: 0.4375rem;
+    .pack-ladder-recent {
+        display: none;
     }
 }
 
