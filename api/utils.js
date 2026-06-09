@@ -6,12 +6,13 @@ const yahooFinance = new YahooFinance();
 // Vercel KV (Redis) for persistent cache across cold starts.
 // Falls back to in-memory when KV env vars aren't set (local dev without credentials).
 let kv = null;
-try {
-    if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
-        kv = require('@vercel/kv').kv;
+if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+    try {
+        const kvModule = '@vercel/kv';
+        kv = require(kvModule).kv;
+    } catch (e) {
+        kv = null;
     }
-} catch (e) {
-    kv = null;
 }
 
 // In-memory fallback for local dev (or when KV is unavailable)
