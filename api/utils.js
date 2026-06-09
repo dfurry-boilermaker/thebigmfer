@@ -265,14 +265,26 @@ function ytdInterval(currentMonth) {
     return '1mo';
 }
 
-// Trigger background refresh (fire-and-forget)
+// Trigger background refresh (fire-and-forget, safe for Node <18)
 function triggerBackgroundRefresh() {
     const baseUrl = process.env.VERCEL_URL
         ? `https://${process.env.VERCEL_URL}`
         : `http://localhost:${process.env.PORT || 3000}`;
-    fetch(`${baseUrl}/api/cron/refresh-cache`, {
-        headers: { 'Authorization': `Bearer ${process.env.CRON_SECRET || ''}` }
-    }).catch(() => {});
+    try {
+        const url = `${baseUrl}/api/cron/refresh-cache`;
+        if (typeof fetch === 'function') {
+            fetch(url, {
+                headers: { 'Authorization': `Bearer ${process.env.CRON_SECRET || ''}` }
+            }).catch(() => {});
+        } else {
+            const https = require('https');
+            const http = require('http');
+            const mod = url.startsWith('https') ? https : http;
+            const req = mod.get(url, { headers: { 'Authorization': `Bearer ${process.env.CRON_SECRET || ''}` } });
+            req.on('error', () => {});
+            req.end();
+        }
+    } catch (e) {}
 }
 
 module.exports = {
