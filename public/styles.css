@@ -1378,8 +1378,12 @@ section h2 {
     min-height: 60px;
 }
 
-.rank, .manager-info, .price-percent-combined {
+.rank, .manager-info, .leaderboard-mobile-ytd, .price-percent-combined {
     grid-row: 1;
+}
+
+.leaderboard-mobile-ytd {
+    display: none;
 }
 
 .analysis-content {
@@ -1413,12 +1417,12 @@ section h2 {
 
 @media (max-width: 480px) {
     .leaderboard-item {
-        grid-template-columns: 20px 1fr;
-        grid-template-rows: auto auto auto;
-        column-gap: 6px;
-        row-gap: 8px;
-        padding: 10px 8px;
-        min-height: 50px;
+        grid-template-columns: 18px minmax(0, 1fr) auto;
+        grid-template-rows: auto auto;
+        column-gap: 7px;
+        row-gap: 4px;
+        padding: 6px 8px;
+        min-height: 36px;
     }
 
     .analysis-text {
@@ -1432,7 +1436,7 @@ section h2 {
     }
 
     .analysis-content {
-        grid-row: 3;
+        grid-row: 2;
     }
 
     .current-price {
@@ -1827,7 +1831,7 @@ section h2 {
     }
 
     .leaderboard-header {
-        margin-bottom: 16px;
+        margin-bottom: 8px;
     }
     
     .leaderboard-section h2 {
@@ -1836,7 +1840,7 @@ section h2 {
     }
     
     .tap-for-analysis {
-        font-size: 0.5625rem;
+        display: none;
     }
 
     .leaderboard {
@@ -1844,16 +1848,17 @@ section h2 {
     }
 
     .leaderboard-item {
-        grid-template-columns: 24px minmax(0, 1fr);
-        column-gap: 8px;
-        row-gap: 10px;
-        padding: 12px 10px;
+        grid-template-columns: 18px minmax(0, 1fr) auto;
+        column-gap: 7px;
+        row-gap: 4px;
+        padding: 5px 8px;
+        min-height: 34px;
     }
 
     .rank {
-        font-size: 0.6875rem;
-        width: 22px;
-        height: 22px;
+        font-size: 0.625rem;
+        width: 18px;
+        height: 18px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -1865,7 +1870,7 @@ section h2 {
         display: flex;
         flex-direction: row;
         align-items: center;
-        gap: 5px;
+        gap: 4px;
         flex-wrap: nowrap;
         white-space: nowrap;
         min-width: 0;
@@ -1875,60 +1880,63 @@ section h2 {
         font-size: 0.6875rem;
         overflow: hidden;
         text-overflow: ellipsis;
+        max-width: 86px;
     }
 
     .stock-symbol {
-        font-size: 0.6875rem;
+        font-size: 0.625rem;
     }
 
     .manager-info .current-price {
         display: inline;
-        font-size: 0.6875rem;
+        font-size: 0.625rem;
+        color: var(--text-tertiary);
     }
 
     .price-percent-combined {
-        grid-column: 1 / -1;
-        grid-row: 2;
-        display: grid;
-        grid-template-columns: repeat(6, minmax(0, 1fr));
-        align-items: stretch;
-        gap: 1px;
-        width: 100%;
-        background: var(--border-color);
+        display: none;
+    }
+
+    .leaderboard-mobile-ytd {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        justify-content: center;
+        min-width: 58px;
+        padding: 3px 6px;
         border: 1px solid var(--border-color);
+        background: var(--bg-secondary);
+        font-variant-numeric: tabular-nums;
     }
 
-    .leaderboard-context-metrics {
-        display: contents;
+    .leaderboard-mobile-ytd.positive {
+        color: var(--color-positive);
+        background: var(--positive-bg);
+        border-color: transparent;
     }
 
-    .leaderboard-context-metric {
-        min-width: 0;
-        flex: none;
-        gap: 1px;
-        padding: 7px 2px;
-        background: var(--leaderboard-bg);
+    .leaderboard-mobile-ytd.negative {
+        color: var(--color-negative);
+        background: var(--negative-bg);
+        border-color: transparent;
     }
 
-    .context-label {
-        font-size: 0.5rem;
+    .leaderboard-mobile-ytd.no-data {
+        color: var(--text-tertiary);
     }
 
-    .context-value {
-        font-size: 0.625rem;
-        white-space: nowrap;
+    .leaderboard-mobile-ytd-label {
+        color: var(--text-tertiary);
+        font-size: 0.4375rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        line-height: 1;
     }
 
-    .price-percent-combined .time-periods {
-        display: contents;
-    }
-
-    .time-period {
-        min-width: 0;
-        flex: none;
-        gap: 1px;
-        padding: 7px 2px;
-        background: var(--leaderboard-bg);
+    .leaderboard-mobile-ytd-value {
+        font-size: 0.875rem;
+        font-weight: 800;
+        line-height: 1.1;
     }
 
     .current-price {

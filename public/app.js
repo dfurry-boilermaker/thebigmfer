@@ -661,6 +661,10 @@ function renderLeaderboard(data) {
                         </span>
                     </div>
                 </div>
+                <div class="leaderboard-mobile-ytd ${item.changePercent === null ? 'no-data' : changeYTDClass}">
+                    <span class="leaderboard-mobile-ytd-label">YTD</span>
+                    <span class="leaderboard-mobile-ytd-value">${item.changePercent !== null ? getChangeSign(item.changePercent) + formatPercent(item.changePercent) + '%' : '-'}</span>
+                </div>
                 <div class="price-percent-combined">
                     <div class="leaderboard-context-metrics">
                         <span class="leaderboard-context-metric">
@@ -1623,7 +1627,7 @@ function renderChart(chartData, currentData) {
                             : '';
 
                         const labelText = isMobile
-                            ? `${name} ${symbol} ${ytdFormatted}`
+                            ? `${symbol} ${ytdFormatted}`
                             : `${name} • ${symbol} • ${ytdFormatted}`;
 
                         const textWidth = ctx.measureText(labelText).width;
@@ -1644,39 +1648,43 @@ function renderChart(chartData, currentData) {
 
                     labelData.sort((a, b) => a.y - b.y);
 
-                    // Cluster-based collision resolution: find groups of overlapping
-                    // labels and spread each cluster around its center. Labels that
-                    // don't collide stay pinned to their line endpoint.
-                    const clusters = [];
-                    let cluster = [labelData[0]];
-                    for (let i = 1; i < labelData.length; i++) {
-                        if (labelData[i].y - cluster[cluster.length - 1].y < minSpacing) {
-                            cluster.push(labelData[i]);
-                        } else {
-                            clusters.push(cluster);
-                            cluster = [labelData[i]];
-                        }
-                    }
-                    clusters.push(cluster);
-
-                    clusters.forEach((group) => {
-                        if (group.length === 1) return;
-                        const centerY = group.reduce((sum, l) => sum + l.y, 0) / group.length;
-                        const totalHeight = (group.length - 1) * minSpacing;
-                        let startY = centerY - totalHeight / 2;
-
-                        if (startY < topBound) startY = topBound;
-                        if (startY + totalHeight > bottomBound) startY = bottomBound - totalHeight;
-
-                        group.forEach((label, i) => {
-                            label.y = startY + i * minSpacing;
-                        });
-                    });
-
-                    // Final clamp
+                    // Resolve collisions with a bounded top-down/bottom-up pass.
+                    // This preserves label order while preventing stacked end labels
+                    // from collapsing into each other near the chart edges.
                     labelData.forEach((label) => {
                         label.y = Math.max(topBound, Math.min(bottomBound, label.y));
                     });
+
+                    for (let i = 1; i < labelData.length; i++) {
+                        const previous = labelData[i - 1];
+                        const current = labelData[i];
+                        if (current.y - previous.y < minSpacing) {
+                            current.y = previous.y + minSpacing;
+                        }
+                    }
+
+                    if (labelData[labelData.length - 1].y > bottomBound) {
+                        labelData[labelData.length - 1].y = bottomBound;
+                    }
+
+                    for (let i = labelData.length - 2; i >= 0; i--) {
+                        const next = labelData[i + 1];
+                        const current = labelData[i];
+                        if (next.y - current.y < minSpacing) {
+                            current.y = next.y - minSpacing;
+                        }
+                    }
+
+                    if (labelData[0].y < topBound) {
+                        labelData[0].y = topBound;
+                        for (let i = 1; i < labelData.length; i++) {
+                            const previous = labelData[i - 1];
+                            const current = labelData[i];
+                            if (current.y - previous.y < minSpacing) {
+                                current.y = previous.y + minSpacing;
+                            }
+                        }
+                    }
 
                     // Draw labels right-aligned to chart edge
                     const rightEdge = chartArea.right - 4;
