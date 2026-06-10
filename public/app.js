@@ -2165,9 +2165,9 @@ function renderStats(chartData, currentData) {
     const leader = validStocks[0];
     const laggard = validStocks[validStocks.length - 1];
     const fieldSpread = leader.changePercent - laggard.changePercent;
-    const distributionPadding = Math.max(fieldSpread * 0.12, stdDev * 0.5, 2);
-    let distributionMin = Math.min(laggard.changePercent, avg - stdDev * 2) - distributionPadding;
-    let distributionMax = Math.max(leader.changePercent, avg + stdDev * 2) + distributionPadding;
+    const distributionPadding = Math.max(fieldSpread * 0.06, 2);
+    let distributionMin = laggard.changePercent - distributionPadding;
+    let distributionMax = leader.changePercent + distributionPadding;
 
     if (!Number.isFinite(distributionMin) || !Number.isFinite(distributionMax) || distributionMax <= distributionMin) {
         distributionMin = avg - 5;
@@ -2195,7 +2195,7 @@ function renderStats(chartData, currentData) {
         .join(' ');
     const curveAreaPath = `${curvePath} L 100 84 L 0 84 Z`;
 
-    const labelLanes = [24, 45, 66, 87];
+    const labelLanes = [28, 48, 68, 86];
     const laneRightEdges = labelLanes.map(() => -Infinity);
     const labelGap = 1.5;
 
@@ -2208,7 +2208,7 @@ function renderStats(chartData, currentData) {
             const zScoreClass = Math.abs(zScore) >= 1 ? 'uncommon' : 'common';
             const zScoreText = formatZScore(zScore);
             const label = `${stock.symbol}: ${formatSignedPercentValue(stock.changePercent)} YTD, z-score ${zScoreText}`;
-            const estimatedLabelWidth = Math.max(9, Math.min(16, (stock.symbol.length + zScoreText.length + 3) * 0.85));
+            const estimatedLabelWidth = Math.max(5.5, Math.min(9, stock.symbol.length * 1.45));
             const halfLabelWidth = estimatedLabelWidth / 2;
             const labelX = Math.min(100 - halfLabelWidth, Math.max(halfLabelWidth, x));
             const laneIndex = laneRightEdges.findIndex(rightEdge => labelX - halfLabelWidth > rightEdge + labelGap);
@@ -2222,8 +2222,23 @@ function renderStats(chartData, currentData) {
                 <span class="distribution-stock ${directionClass}" style="left: ${labelX.toFixed(2)}%; top: ${labelLanes[assignedLane].toFixed(2)}%;" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">
                     <span class="distribution-stock-label">
                         <span class="distribution-stock-symbol">${escapeHtml(stock.symbol)}</span>
-                        <span class="distribution-stock-z ${zScoreClass}">z ${zScoreText}</span>
                     </span>
+                </span>
+            `;
+        }).join('');
+
+    const distributionLegend = [...validStocks]
+        .sort((a, b) => getZScore(b.changePercent) - getZScore(a.changePercent))
+        .map(stock => {
+            const zScore = getZScore(stock.changePercent);
+            const zScoreClass = Math.abs(zScore) >= 1 ? 'uncommon' : 'common';
+            const directionClass = stock.changePercent >= 0 ? 'positive' : 'negative';
+
+            return `
+                <span class="distribution-chip ${directionClass}">
+                    <span class="distribution-chip-symbol">${escapeHtml(stock.symbol)}</span>
+                    <span class="distribution-chip-z ${zScoreClass}">z ${formatZScore(zScore)}</span>
+                    <span class="distribution-chip-return">${formatSignedPercentValue(stock.changePercent)}</span>
                 </span>
             `;
         }).join('');
@@ -2274,7 +2289,7 @@ function renderStats(chartData, currentData) {
             <div class="distribution-header">
                 <div>
                     <strong>Distribution</strong>
-                    <span>Each dot is positioned by return; z-score shows distance from the field average.</span>
+                    <span>Dots show YTD return. Z-scores are listed below to show distance from the field average.</span>
                 </div>
                 <span class="distribution-range">${formatSignedPercentValue(laggard.changePercent)} to ${formatSignedPercentValue(leader.changePercent)}</span>
             </div>
@@ -2295,6 +2310,9 @@ function renderStats(chartData, currentData) {
             <div class="distribution-axis" aria-hidden="true">
                 <span>${formatSignedPercentValue(distributionMin)}</span>
                 <span>${formatSignedPercentValue(distributionMax)}</span>
+            </div>
+            <div class="distribution-legend" aria-label="Stock z-scores">
+                ${distributionLegend}
             </div>
         </div>
     `;

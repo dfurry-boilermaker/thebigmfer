@@ -947,7 +947,7 @@ section h2 {
 
 .distribution-plot {
     position: relative;
-    height: 132px;
+    height: 112px;
     border: 1px solid var(--border-color);
     background:
         linear-gradient(90deg, transparent 0, transparent calc(50% - 0.5px), var(--border-color) calc(50% - 0.5px), var(--border-color) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
@@ -1014,7 +1014,7 @@ section h2 {
     display: inline-flex;
     flex-direction: column;
     align-items: center;
-    gap: 3px;
+    gap: 2px;
     transform: translate(-50%, -50%);
     z-index: 3;
 }
@@ -1039,7 +1039,6 @@ section h2 {
 .distribution-stock-label {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
     padding: 2px 4px;
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
@@ -1054,14 +1053,14 @@ section h2 {
     letter-spacing: 0.02em;
 }
 
-.distribution-stock-z {
+.distribution-chip-z {
     color: var(--text-tertiary);
     font-size: 0.5rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
 }
 
-.distribution-stock-z.uncommon {
+.distribution-chip-z.uncommon {
     color: var(--text-primary);
 }
 
@@ -1072,6 +1071,58 @@ section h2 {
     color: var(--text-tertiary);
     font-size: 0.625rem;
     font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.distribution-legend {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.distribution-chip {
+    display: grid;
+    grid-template-columns: auto auto;
+    grid-template-areas:
+        "symbol z"
+        "symbol return";
+    align-items: center;
+    column-gap: 5px;
+    row-gap: 1px;
+    padding: 5px 6px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-left: 2px solid var(--text-tertiary);
+}
+
+.distribution-chip.positive {
+    border-left-color: var(--color-positive);
+}
+
+.distribution-chip.negative {
+    border-left-color: var(--color-negative);
+}
+
+.distribution-chip-symbol {
+    grid-area: symbol;
+    color: var(--text-primary);
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.distribution-chip-z {
+    grid-area: z;
+    justify-self: end;
+}
+
+.distribution-chip-return {
+    grid-area: return;
+    justify-self: end;
+    color: var(--text-tertiary);
+    font-size: 0.5rem;
+    font-weight: 700;
     font-variant-numeric: tabular-nums;
 }
 
@@ -1209,7 +1260,7 @@ section h2 {
     }
 
     .distribution-plot {
-        height: 124px;
+        height: 104px;
     }
 
     .stats-grid {
@@ -1237,7 +1288,7 @@ section h2 {
     }
 
     .distribution-plot {
-        height: 112px;
+        height: 96px;
     }
 
     .distribution-marker span {
@@ -1254,7 +1305,23 @@ section h2 {
         font-size: 0.5rem;
     }
 
-    .distribution-stock-z {
+    .distribution-legend {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 3px;
+        margin-top: 6px;
+    }
+
+    .distribution-chip {
+        padding: 4px;
+        column-gap: 3px;
+    }
+
+    .distribution-chip-symbol {
+        font-size: 0.5625rem;
+    }
+
+    .distribution-chip-z,
+    .distribution-chip-return {
         font-size: 0.4375rem;
     }
 
@@ -1851,23 +1918,25 @@ section h2 {
     .price-percent-combined {
         grid-column: 1 / -1;
         grid-row: 2;
-        display: flex;
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
         align-items: stretch;
-        justify-content: space-between;
-        gap: 8px;
+        gap: 1px;
         width: 100%;
+        background: var(--border-color);
+        border: 1px solid var(--border-color);
     }
 
     .leaderboard-context-metrics {
-        gap: 8px;
-        justify-content: flex-start;
-        flex: 0 0 auto;
+        display: contents;
     }
 
     .leaderboard-context-metric {
         min-width: 0;
-        flex: 1 1 0;
+        flex: none;
         gap: 1px;
+        padding: 6px 2px;
+        background: var(--leaderboard-bg);
     }
 
     .context-label {
@@ -1880,15 +1949,15 @@ section h2 {
     }
 
     .price-percent-combined .time-periods {
-        gap: 8px;
-        flex: 1 1 auto;
-        justify-content: flex-end;
+        display: contents;
     }
 
     .time-period {
         min-width: 0;
-        flex: 1 1 0;
+        flex: none;
         gap: 1px;
+        padding: 6px 2px;
+        background: var(--leaderboard-bg);
     }
 
     .current-price {
