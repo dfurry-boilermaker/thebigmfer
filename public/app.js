@@ -2165,6 +2165,63 @@ function renderStats(chartData, currentData) {
     const leader = validStocks[0];
     const laggard = validStocks[validStocks.length - 1];
     const fieldSpread = leader.changePercent - laggard.changePercent;
+    const distributionPadding = Math.max(fieldSpread * 0.12, stdDev * 0.5, 2);
+    let distributionMin = Math.min(laggard.changePercent, avg - stdDev * 2) - distributionPadding;
+    let distributionMax = Math.max(leader.changePercent, avg + stdDev * 2) + distributionPadding;
+
+    if (!Number.isFinite(distributionMin) || !Number.isFinite(distributionMax) || distributionMax <= distributionMin) {
+        distributionMin = avg - 5;
+        distributionMax = avg + 5;
+    }
+
+    const distributionRange = distributionMax - distributionMin;
+    const safeStdDev = stdDev > 0 ? stdDev : distributionRange / 6;
+    const getDistributionPosition = value => {
+        const position = ((value - distributionMin) / distributionRange) * 100;
+        return Math.min(100, Math.max(0, position));
+    };
+    const getDensity = value => Math.exp(-0.5 * Math.pow((value - avg) / safeStdDev, 2));
+    const getZScore = value => stdDev > 0 ? (value - avg) / stdDev : 0;
+    const formatZScore = value => `${value >= 0 ? '+' : ''}${value.toFixed(1)}`;
+
+    const curvePoints = Array.from({ length: 49 }, (_, index) => {
+        const x = (index / 48) * 100;
+        const value = distributionMin + (distributionRange * index / 48);
+        const y = 78 - (getDensity(value) * 48);
+        return { x, y };
+    });
+    const curvePath = curvePoints
+        .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
+        .join(' ');
+    const curveAreaPath = `${curvePath} L 100 84 L 0 84 Z`;
+
+    const distributionDots = [...validStocks]
+        .sort((a, b) => a.changePercent - b.changePercent)
+        .map((stock, index) => {
+            const x = getDistributionPosition(stock.changePercent);
+            const laneOffset = ((index % 3) - 1) * 7;
+            const y = Math.min(76, Math.max(20, 78 - (getDensity(stock.changePercent) * 42) + laneOffset));
+            const directionClass = stock.changePercent >= 0 ? 'positive' : 'negative';
+            const zScore = getZScore(stock.changePercent);
+            const zScoreClass = Math.abs(zScore) >= 1 ? 'uncommon' : 'common';
+            const zScoreText = formatZScore(zScore);
+            const label = `${stock.symbol}: ${formatSignedPercentValue(stock.changePercent)} YTD, z-score ${zScoreText}`;
+
+            return `
+                <span class="distribution-stock ${directionClass}" style="left: ${x.toFixed(2)}%; top: ${y.toFixed(2)}%;" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">
+                    <span class="distribution-stock-label">
+                        <span class="distribution-stock-symbol">${escapeHtml(stock.symbol)}</span>
+                        <span class="distribution-stock-z ${zScoreClass}">z ${zScoreText}</span>
+                    </span>
+                </span>
+            `;
+        }).join('');
+
+    const avgPosition = getDistributionPosition(avg);
+    const medianPosition = getDistributionPosition(median);
+    const zeroMarker = distributionMin < 0 && distributionMax > 0
+        ? `<span class="distribution-zero" style="left: ${getDistributionPosition(0).toFixed(2)}%;" aria-hidden="true"></span>`
+        : '';
 
     const summaryHtml = `
         <div class="stats-summary">
@@ -2201,7 +2258,37 @@ function renderStats(chartData, currentData) {
         </div>
     `;
 
-    grid.innerHTML = summaryHtml;
+    const distributionHtml = `
+        <div class="stats-distribution">
+            <div class="distribution-header">
+                <div>
+                    <strong>YTD Distribution</strong>
+                    <span>Each dot is positioned by return; z-score shows distance from the field average.</span>
+                </div>
+                <span class="distribution-range">${formatSignedPercentValue(laggard.changePercent)} to ${formatSignedPercentValue(leader.changePercent)}</span>
+            </div>
+            <div class="distribution-plot" role="img" aria-label="YTD return distribution for all competition stocks">
+                <svg class="distribution-curve" viewBox="0 0 100 86" preserveAspectRatio="none" aria-hidden="true">
+                    <path class="distribution-area" d="${curveAreaPath}"></path>
+                    <path class="distribution-line" d="${curvePath}"></path>
+                </svg>
+                ${zeroMarker}
+                <span class="distribution-marker distribution-marker-average" style="left: ${avgPosition.toFixed(2)}%;">
+                    <span>Avg ${formatSignedPercentValue(avg)}</span>
+                </span>
+                <span class="distribution-marker distribution-marker-median" style="left: ${medianPosition.toFixed(2)}%;">
+                    <span>Med ${formatSignedPercentValue(median)}</span>
+                </span>
+                ${distributionDots}
+            </div>
+            <div class="distribution-axis" aria-hidden="true">
+                <span>${formatSignedPercentValue(distributionMin)}</span>
+                <span>${formatSignedPercentValue(distributionMax)}</span>
+            </div>
+        </div>
+    `;
+
+    grid.innerHTML = summaryHtml + distributionHtml;
 }
 
 // Check if US stock market is currently open (client-side check)
