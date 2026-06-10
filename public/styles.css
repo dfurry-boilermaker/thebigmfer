@@ -655,7 +655,8 @@ section h2 {
         margin-bottom: 6px;
     }
 
-    .chart-section-bump h2 {
+    .chart-section-bump h2,
+    .dividends-section h2 {
         font-size: 0.6875rem;
     }
 
@@ -2073,7 +2074,8 @@ section h2 {
        (matches .indexes-section h2 and .leaderboard-section h2) */
     .section-heading h2,
     .chart-section-zoomed .section-heading h2,
-    .chart-section-bump h2 {
+    .chart-section-bump h2,
+    .dividends-section h2 {
         font-size: 0.625rem;
     }
 
