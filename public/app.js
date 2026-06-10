@@ -579,25 +579,6 @@ function getBenchmarkYtd(symbol = 'SPY') {
     }
 }
 
-function getVolatilityBySymbol(chartData) {
-    const volatilityBySymbol = {};
-    if (!chartData || !chartData.data) return volatilityBySymbol;
-
-    chartData.data.forEach(stockChart => {
-        if (stockChart && stockChart.symbol && stockChart.data && stockChart.data.length > 5) {
-            const returns = [];
-            for (let i = 1; i < stockChart.data.length; i++) {
-                returns.push(stockChart.data[i] - stockChart.data[i - 1]);
-            }
-            const retAvg = returns.reduce((a, b) => a + b, 0) / returns.length;
-            const retVar = returns.reduce((s, r) => s + Math.pow(r - retAvg, 2), 0) / returns.length;
-            volatilityBySymbol[stockChart.symbol] = Math.sqrt(retVar);
-        }
-    });
-
-    return volatilityBySymbol;
-}
-
 function renderLeaderboard(data) {
     if (!data || data.length === 0) {
         console.warn('No data to render');
@@ -619,7 +600,6 @@ function renderLeaderboard(data) {
         ? validYtdValues.reduce((a, b) => a + b, 0) / validYtdValues.length
         : null;
     const spyYtd = getBenchmarkYtd('SPY');
-    const volatilityBySymbol = getVolatilityBySymbol(window.lastChartData);
     
     leaderboard.innerHTML = data.map((item, index) => {
         const rank = index + 1;
@@ -633,8 +613,6 @@ function renderLeaderboard(data) {
         const vsAvgClass = vsAvg !== null ? (vsAvg >= 0 ? 'positive' : 'negative') : 'no-data';
         const vsSpy = spyYtd !== null && item.changePercent !== null ? item.changePercent - spyYtd : null;
         const vsSpyClass = vsSpy !== null ? (vsSpy >= 0 ? 'positive' : 'negative') : 'no-data';
-        const volValue = volatilityBySymbol[item.symbol];
-        const volText = Number.isFinite(volValue) ? `${volValue.toFixed(1)} pct pts` : '-';
 
         // Get analysis for this manager
         // First check if analysis is directly on the item (from API), otherwise check managerAnalyses
@@ -710,10 +688,6 @@ function renderLeaderboard(data) {
                         <span class="leaderboard-context-metric">
                             <span class="context-label">vs SPY</span>
                             <span class="context-value ${vsSpyClass}">${vsSpy !== null ? formatSignedPercentValue(vsSpy) : '-'}</span>
-                        </span>
-                        <span class="leaderboard-context-metric">
-                            <span class="context-label">Volatility</span>
-                            <span class="context-value ${Number.isFinite(volValue) ? '' : 'no-data'}">${volText}</span>
                         </span>
                     </div>
                 </div>
