@@ -1488,7 +1488,7 @@ function renderChart(chartData, currentData) {
                 maintainAspectRatio: false,
                 plugins: {
                     title: {
-                        display: false,
+                        display: true,
                         text: 'YTD Performance',
                         position: 'top',
                         align: 'start',
