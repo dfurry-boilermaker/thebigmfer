@@ -1883,61 +1883,64 @@ section h2 {
     }
 
     .leaderboard-item {
-        grid-template-columns: 22px minmax(102px, 0.75fr) minmax(190px, 1.25fr);
+        grid-template-columns: 24px minmax(0, 1fr);
         column-gap: 8px;
-        row-gap: 0;
+        row-gap: 10px;
         align-items: center;
-        padding: 18px 10px;
-        min-height: 82px;
+        padding: 12px 10px;
+        min-height: 0;
     }
 
     .rank {
         font-size: 0.6875rem;
-        width: auto;
-        height: auto;
-        display: block;
-        background: transparent;
-        border: none;
+        width: 22px;
+        height: 22px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
     }
 
     .manager-info {
         display: flex;
         flex-direction: row;
         align-items: center;
-        gap: 7px;
+        gap: 5px;
         flex-wrap: nowrap;
         white-space: nowrap;
         min-width: 0;
     }
 
     .manager-name {
-        font-size: 0.875rem;
+        font-size: 0.6875rem;
         font-weight: 600;
         overflow: hidden;
         text-overflow: ellipsis;
+        max-width: 88px;
     }
 
     .stock-symbol {
-        font-size: 0.75rem;
+        font-size: 0.6875rem;
     }
 
     .manager-info .current-price {
         display: inline;
         color: var(--text-primary);
-        font-size: 0.875rem;
+        font-size: 0.6875rem;
         font-weight: 700;
     }
 
     .price-percent-combined {
-        grid-column: 3;
-        grid-row: 1;
+        grid-column: 1 / -1;
+        grid-row: 2;
         display: grid;
         grid-template-columns: repeat(6, minmax(0, 1fr));
         align-items: stretch;
-        gap: 7px;
+        gap: 1px;
         width: 100%;
-        background: transparent;
-        border: none;
+        background: var(--border-color);
+        border: 1px solid var(--border-color);
     }
 
     .leaderboard-context-metrics {
@@ -1947,18 +1950,18 @@ section h2 {
     .leaderboard-context-metric {
         min-width: 0;
         flex: none;
-        gap: 5px;
-        padding: 0;
-        background: transparent;
+        gap: 1px;
+        padding: 7px 2px;
+        background: var(--leaderboard-bg);
     }
 
     .context-label {
-        font-size: 0.5625rem;
-        letter-spacing: 0.06em;
+        font-size: 0.5rem;
+        letter-spacing: 0.05em;
     }
 
     .context-value {
-        font-size: 0.75rem;
+        font-size: 0.625rem;
         white-space: nowrap;
     }
 
@@ -1969,9 +1972,9 @@ section h2 {
     .time-period {
         min-width: 0;
         flex: none;
-        gap: 5px;
-        padding: 0;
-        background: transparent;
+        gap: 1px;
+        padding: 7px 2px;
+        background: var(--leaderboard-bg);
     }
 
     .current-price {
@@ -1980,12 +1983,12 @@ section h2 {
     }
 
     .period-label {
-        font-size: 0.5625rem;
-        letter-spacing: 0.06em;
+        font-size: 0.5rem;
+        letter-spacing: 0.05em;
     }
 
     .period-value {
-        font-size: 0.75rem;
+        font-size: 0.625rem;
         white-space: nowrap;
     }
 }
