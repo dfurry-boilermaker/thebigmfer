@@ -376,19 +376,14 @@ async function getBaselinePrices(symbols) {
 }
 
 // Per-symbol dividend cache: dividends change at most quarterly, so 24h is plenty
-const dividendCache = new Map(); // symbol -> { totalDividends, fetchedAt }
+const dividendCache = new Map(); // symbol -> { payments, fetchedAt }
 const DIVIDEND_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
-// Get YTD dividends for a symbol (actual dividends with an ex-date since Jan 1, 2026),
-// returned as a percentage of the baseline price
-async function getYTDDividends(symbol, baselinePrice) {
-    if (!baselinePrice || baselinePrice <= 0) {
-        return 0;
-    }
-
+// Get the 2026 dividend payment history for a symbol (ex-date + amount per payment)
+async function getDividendPayments(symbol) {
     const cached = dividendCache.get(symbol);
     if (cached && (Date.now() - cached.fetchedAt) < DIVIDEND_CACHE_TTL_MS) {
-        return (cached.totalDividends / baselinePrice) * 100;
+        return cached.payments;
     }
 
     try {
@@ -404,18 +399,59 @@ async function getYTDDividends(symbol, baselinePrice) {
         const dividends = Array.isArray(rawDividends) ? rawDividends : Object.values(rawDividends || {});
         const yearStart = new Date(2026, 0, 1);
 
-        const totalDividends = dividends
+        const payments = dividends
             .filter(div => div && typeof div.amount === 'number' && new Date(div.date) >= yearStart)
-            .reduce((sum, div) => sum + div.amount, 0);
+            .map(div => ({
+                date: new Date(div.date).toISOString().split('T')[0],
+                amount: div.amount
+            }))
+            .sort((a, b) => a.date.localeCompare(b.date));
 
-        dividendCache.set(symbol, { totalDividends, fetchedAt: Date.now() });
+        dividendCache.set(symbol, { payments, fetchedAt: Date.now() });
 
-        return (totalDividends / baselinePrice) * 100;
+        return payments;
     } catch (error) {
-        // Non-critical: leaderboard falls back to price-only return for this symbol
+        // Non-critical: callers fall back to price-only return for this symbol
         console.warn(`Could not fetch dividend history for ${symbol}:`, error.message);
+        return [];
+    }
+}
+
+// Get YTD dividends for a symbol (actual dividends with an ex-date since Jan 1, 2026),
+// returned as a percentage of the baseline price
+async function getYTDDividends(symbol, baselinePrice) {
+    if (!baselinePrice || baselinePrice <= 0) {
         return 0;
     }
+
+    const payments = await getDividendPayments(symbol);
+    const totalDividends = payments.reduce((sum, p) => sum + p.amount, 0);
+    return (totalDividends / baselinePrice) * 100;
+}
+
+// Build the per-manager dividend summary for /api/dividends
+// (shared by the Vercel function and the local dev server)
+async function buildDividendSummary() {
+    const managers = loadManagersFromConfig();
+    const symbols = managers.map(m => m.stockSymbol);
+    const baselinePrices = await getBaselinePrices(symbols);
+
+    return Promise.all(managers.map(async (manager, index) => {
+        const baselinePrice = baselinePrices[index] || null;
+        const payments = await getDividendPayments(manager.stockSymbol);
+        const totalPerShare = payments.reduce((sum, p) => sum + p.amount, 0);
+
+        return {
+            name: manager.name,
+            symbol: manager.stockSymbol,
+            baselinePrice: baselinePrice,
+            payments: payments,
+            totalPerShare: totalPerShare,
+            yieldPct: baselinePrice && baselinePrice > 0
+                ? (totalPerShare / baselinePrice) * 100
+                : null
+        };
+    }));
 }
 
 // Compute the full leaderboard entry for one manager from a live quote.
@@ -598,6 +634,8 @@ module.exports = {
     getHistoricalPrice,
     getBaselinePrices,
     getYTDDividends,
+    getDividendPayments,
+    buildDividendSummary,
     computeManagerResult,
     isRateLimitError,
     getIntradayData,

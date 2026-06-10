@@ -2375,16 +2375,90 @@ function renderIndexes(data) {
     }).join('');
 }
 
+// Load Dividends
+async function loadDividends() {
+    const container = document.getElementById('dividends');
+    if (!container) return;
+    try {
+        const response = await fetch(`${API_BASE}/dividends`);
+        if (!response.ok) {
+            container.innerHTML = `<div class="error-message">Failed to load dividend data. Please try again later.</div>`;
+            return;
+        }
+        const data = await response.json();
+        if (!data || !Array.isArray(data) || data.length === 0) {
+            container.innerHTML = `<div class="empty-state"><p>No dividend data available.</p></div>`;
+            return;
+        }
+        renderDividends(data);
+    } catch (error) {
+        console.error('Error loading dividends:', error);
+        container.innerHTML = `<div class="error-message">Failed to load dividend data. Please try again later.</div>`;
+    }
+}
+
+function renderDividends(data) {
+    const container = document.getElementById('dividends');
+    if (!container) return;
+
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const formatExDate = iso => {
+        const date = new Date(iso + 'T12:00:00');
+        return `${monthNames[date.getMonth()]} ${date.getDate()}`;
+    };
+
+    const payers = data
+        .filter(d => d.totalPerShare > 0)
+        .sort((a, b) => (b.yieldPct || 0) - (a.yieldPct || 0));
+    const nonPayers = data.filter(d => !d.totalPerShare || d.totalPerShare <= 0);
+
+    if (payers.length === 0) {
+        container.innerHTML = `<div class="empty-state"><p>No dividends paid in 2026 yet.</p></div>`;
+        return;
+    }
+
+    const rows = payers.map(item => {
+        const paymentChips = item.payments.map(p => `
+            <span class="dividend-payment">${formatExDate(p.date)} &middot; $${p.amount.toFixed(p.amount < 0.1 ? 3 : 2)}</span>
+        `).join('');
+
+        return `
+            <div class="dividend-row">
+                <div class="dividend-identity">
+                    <span class="dividend-name">${escapeHtml(item.name)}</span>
+                    <span class="dividend-symbol">${escapeHtml(item.symbol)}</span>
+                </div>
+                <div class="dividend-payments">${paymentChips}</div>
+                <div class="dividend-totals">
+                    <span class="dividend-total">$${item.totalPerShare.toFixed(2)}/share</span>
+                    <span class="dividend-yield">${item.yieldPct !== null ? '+' + item.yieldPct.toFixed(2) + '% to YTD' : '-'}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    const footnote = nonPayers.length > 0
+        ? `<p class="dividends-footnote">No 2026 dividends: ${nonPayers.map(d => `${escapeHtml(d.symbol)} (${escapeHtml(d.name)})`).join(', ')}</p>`
+        : '';
+
+    container.innerHTML = `
+        <div class="dividend-list">${rows}</div>
+        ${footnote}
+    `;
+}
+
 // Initial load
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         loadLeaderboard();
         loadIndexes();
+        loadDividends();
         setTimeout(loadChart, 100);
     });
 } else {
     loadLeaderboard();
     loadIndexes();
+    loadDividends();
     setTimeout(loadChart, 100);
 }
 

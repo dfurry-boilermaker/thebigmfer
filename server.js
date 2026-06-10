@@ -1,7 +1,7 @@
 const express = require('express');
 const YahooFinance = require('yahoo-finance2').default;
 const yahooFinance = new YahooFinance();
-const { loadManagersFromConfig, getHistoricalPrice, getBaselinePrices, computeManagerResult } = require('./api/utils');
+const { loadManagersFromConfig, getHistoricalPrice, getBaselinePrices, computeManagerResult, buildDividendSummary } = require('./api/utils');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -142,6 +142,17 @@ app.get('/api/stocks/monthly', async (req, res) => {
     } catch (error) {
         console.error('Error fetching monthly stocks:', error);
         res.status(500).json({ error: 'Failed to fetch monthly stock data' });
+    }
+});
+
+// Per-manager 2026 dividend history (same logic as api/dividends.js)
+app.get('/api/dividends', async (req, res) => {
+    try {
+        const summary = await buildDividendSummary();
+        res.json(summary);
+    } catch (error) {
+        console.error('Error fetching dividends:', error);
+        res.status(500).json({ error: 'Failed to fetch dividend data' });
     }
 });
 

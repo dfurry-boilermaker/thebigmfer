@@ -12,6 +12,9 @@
     "api/indexes.js": {
       "maxDuration": 30
     },
+    "api/dividends.js": {
+      "maxDuration": 30
+    },
     "api/cron/refresh-cache.js": {
       "maxDuration": 30
     }
