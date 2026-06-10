@@ -11,7 +11,15 @@
     },
     "api/indexes.js": {
       "maxDuration": 30
+    },
+    "api/cron/refresh-cache.js": {
+      "maxDuration": 30
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/refresh-cache",
+      "schedule": "*/15 13-21 * * 1-5"
+    }
+  ]
 }
-

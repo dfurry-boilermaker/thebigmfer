@@ -293,12 +293,27 @@ section h2 {
     margin-bottom: 6px;
 }
 
+/* Keep the pack heading, description, and pills left-aligned
+   (.chart-section centers text for the canvas charts) */
+.chart-section-zoomed .section-heading {
+    text-align: left;
+}
+
+.chart-section-bump h2 {
+    text-align: left;
+}
+
+.chart-container-bump {
+    height: 440px;
+    min-height: 440px;
+}
+
 .pack-summary {
     display: flex;
-    justify-content: flex-end;
+    justify-content: flex-start;
     gap: 8px;
     flex-wrap: wrap;
-    max-width: 50%;
+    margin-top: 10px;
 }
 
 .pack-pill {
@@ -361,20 +376,6 @@ section h2 {
 
 .pack-ladder-heading-label {
     text-align: left;
-}
-
-.pack-ladder-scale {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-}
-
-.pack-ladder-scale span:nth-child(2) {
-    text-align: center;
-}
-
-.pack-ladder-scale span:last-child {
-    text-align: right;
 }
 
 .pack-ladder-value-headings {
@@ -649,14 +650,13 @@ section h2 {
         overflow: visible;
     }
 
-    .chart-section h2 {
-        font-size: 1.25rem;
-        margin-bottom: 20px;
-    }
-
     .chart-section-zoomed .section-heading h2 {
         font-size: 0.6875rem;
         margin-bottom: 6px;
+    }
+
+    .chart-section-bump h2 {
+        font-size: 0.6875rem;
     }
 
     .main-content {
@@ -1917,11 +1917,13 @@ section h2 {
         font-weight: 600;
         overflow: hidden;
         text-overflow: ellipsis;
-        max-width: 88px;
+        flex: 0 1 auto;
+        min-width: 0;
     }
 
     .stock-symbol {
         font-size: 0.6875rem;
+        flex-shrink: 0;
     }
 
     .manager-info .current-price {
@@ -1929,13 +1931,14 @@ section h2 {
         color: var(--text-primary);
         font-size: 0.6875rem;
         font-weight: 700;
+        flex-shrink: 0;
     }
 
     .price-percent-combined {
         grid-column: 1 / -1;
         grid-row: 2;
         display: grid;
-        grid-template-columns: repeat(6, minmax(0, 1fr));
+        grid-template-columns: 2fr 5fr;
         align-items: stretch;
         gap: 1px;
         width: 100%;
@@ -1944,7 +1947,9 @@ section h2 {
     }
 
     .leaderboard-context-metrics {
-        display: contents;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1px;
     }
 
     .leaderboard-context-metric {
@@ -1966,7 +1971,9 @@ section h2 {
     }
 
     .price-percent-combined .time-periods {
-        display: contents;
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 1px;
     }
 
     .time-period {
@@ -1990,5 +1997,144 @@ section h2 {
     .period-value {
         font-size: 0.625rem;
         white-space: nowrap;
+    }
+}
+
+/* Weekly recap line under the header */
+.weekly-recap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    margin: -16px 0 28px;
+}
+
+.weekly-recap[hidden] {
+    display: none;
+}
+
+.weekly-recap-text {
+    min-width: 0;
+    text-align: left;
+}
+
+.weekly-recap-item {
+    display: inline;
+}
+
+.weekly-recap-item + .weekly-recap-item::before {
+    content: '\00b7';
+    margin: 0 8px;
+    color: var(--text-tertiary);
+}
+
+/* Rank change vs one week ago */
+.rank-delta {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+}
+
+.rank-delta.up {
+    color: var(--color-positive);
+}
+
+.rank-delta.down {
+    color: var(--color-negative);
+}
+
+/* Gap to the rank above / days in lead */
+.race-note {
+    color: var(--text-tertiary);
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+
+.race-note.lead {
+    color: var(--color-positive);
+    font-weight: 500;
+}
+
+.analysis-text.placeholder {
+    font-style: italic;
+    color: var(--text-tertiary);
+}
+
+.leaderboard-item.clickable:focus-visible {
+    outline: 2px solid var(--color-positive);
+    outline-offset: -2px;
+}
+
+@media (max-width: 480px) {
+    /* Keep every section header the same size on small screens
+       (matches .indexes-section h2 and .leaderboard-section h2) */
+    .section-heading h2,
+    .chart-section-zoomed .section-heading h2,
+    .chart-section-bump h2 {
+        font-size: 0.625rem;
+    }
+
+    .race-note {
+        display: none;
+    }
+
+    .weekly-recap {
+        font-size: 0.6875rem;
+        margin: -12px 0 20px;
+        align-items: flex-start;
+        justify-content: flex-start;
+    }
+
+    .weekly-recap-label {
+        margin-top: 1px;
+    }
+
+    /* Stack insights one per line on mobile */
+    .weekly-recap-item {
+        display: block;
+    }
+
+    .weekly-recap-item::before {
+        content: '\00b7';
+        margin-right: 6px;
+        color: var(--text-tertiary);
+    }
+
+    .weekly-recap-item + .weekly-recap-item::before {
+        margin: 0 6px 0 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+.weekly-recap-label {
+    display: inline-block;
+    flex-shrink: 0;
+    padding: 2px 8px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-tertiary);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    vertical-align: 1px;
+}
+
+@media (max-width: 768px) {
+    .chart-container-bump {
+        height: 380px;
+        min-height: 380px;
     }
 }

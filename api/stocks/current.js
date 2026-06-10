@@ -3,8 +3,8 @@ const yahooFinance = new YahooFinance();
 const {
     loadManagersFromConfig,
     getBaselinePrices,
-    getYTDDividends,
-    getHistoricalPrice,
+    computeManagerResult,
+    isRateLimitError,
     shouldUseCache,
     getCachedStockData,
     setCachedStockData,
@@ -50,7 +50,7 @@ module.exports = async (req, res) => {
                 isRateLimited = true;
             }
         } catch (testError) {
-            if (testError.message && testError.message.includes('Too Many Requests')) {
+            if (isRateLimitError(testError)) {
                 isRateLimited = true;
             }
         }
@@ -74,7 +74,7 @@ module.exports = async (req, res) => {
             quotes = Array.isArray(result) ? result : [result];
         } catch (error) {
             // Check if it's a rate limit error
-            if (error.message && error.message.includes('Too Many Requests')) {
+            if (isRateLimitError(error)) {
                 const cachedData = await getCachedStockData(CACHE_KEYS.CURRENT);
                 if (cachedData) {
                     return res.status(200).json(cachedData);
@@ -88,10 +88,6 @@ module.exports = async (req, res) => {
                             const result = await yahooFinance.quote(symbol);
                             return Array.isArray(result) ? result[0] : result;
                         } catch (err) {
-                            // Check for rate limit
-                            if (err.message && err.message.includes('Too Many Requests')) {
-                                return null;
-                            }
                             return null;
                         }
                     })
@@ -130,81 +126,12 @@ module.exports = async (req, res) => {
         }
         
         // Calculate performance for each manager
-        const results = await Promise.all(managers.map(async (manager, index) => {
-            const symbol = manager.stockSymbol;
-            const quote = quoteMap[symbol];
-            const baselinePrice = baselinePrices[index];
-            
-            if (!quote || !baselinePrice) {
-                // Skip entries without valid data - we'll filter them out
-                return null;
-            }
-            
-            const currentPrice = quote.regularMarketPrice || quote.price || quote.regularMarketPreviousClose || 0;
-            const previousClose = quote.regularMarketPreviousClose || baselinePrice || currentPrice;
-            
-            // Calculate YTD percentage change (price appreciation)
-            const ytdPriceChange = baselinePrice > 0 
-                ? ((currentPrice - baselinePrice) / baselinePrice) * 100 
-                : 0;
-            
-            // Get YTD dividends (as percentage)
-            const ytdDividendYield = await getYTDDividends(symbol, baselinePrice);
-            
-            // Calculate total return (price change + dividends)
-            const ytdChange = ytdPriceChange + ytdDividendYield;
-            
-            // Calculate 1d change
-            let change1d = null;
-            if (previousClose && previousClose > 0) {
-                change1d = ((currentPrice - previousClose) / previousClose) * 100;
-            } else if (baselinePrice && baselinePrice > 0) {
-                // Use baseline if previousClose not available (first trading day)
-                change1d = ((currentPrice - baselinePrice) / baselinePrice) * 100;
-            }
-            
-            // Calculate 1m and 3m changes (only if enough time has passed in 2026)
-            const yearStart = new Date(2026, 0, 1);
-            const today = new Date();
-            const daysSinceStart = Math.floor((today - yearStart) / (1000 * 60 * 60 * 24));
+        const results = await Promise.all(managers.map((manager, index) =>
+            computeManagerResult(manager, quoteMap[manager.stockSymbol], baselinePrices[index])
+        ));
 
-            let change1m = null;
-            let change3m = null;
-
-            // Calculate 1m change if at least 30 days have passed
-            if (daysSinceStart >= 30) {
-                const oneMonthAgo = new Date(today);
-                oneMonthAgo.setDate(today.getDate() - 30);
-                const oneMonthPrice = await getHistoricalPrice(symbol, oneMonthAgo.toISOString().split('T')[0]);
-                if (oneMonthPrice && oneMonthPrice > 0) {
-                    change1m = ((currentPrice - oneMonthPrice) / oneMonthPrice) * 100;
-                }
-            }
-
-            // Calculate 3m change if at least 90 days have passed
-            if (daysSinceStart >= 90) {
-                const threeMonthsAgo = new Date(today);
-                threeMonthsAgo.setDate(today.getDate() - 90);
-                const threeMonthPrice = await getHistoricalPrice(symbol, threeMonthsAgo.toISOString().split('T')[0]);
-                if (threeMonthPrice && threeMonthPrice > 0) {
-                    change3m = ((currentPrice - threeMonthPrice) / threeMonthPrice) * 100;
-                }
-            }
-            
-            return {
-                name: manager.name,
-                symbol: symbol,
-                currentPrice: currentPrice,
-                changePercent: ytdChange,
-                change1d: change1d,
-                change1m: change1m,
-                change3m: change3m,
-                analysis: manager.analysis || null // Include analysis from managers.json
-            };
-        }));
-        
-        // Filter out null entries (entries without valid data)
-        const validResults = results.filter(r => r !== null);
+        // Filter out entries without valid data
+        const validResults = results.filter(r => r.changePercent !== null);
         
         // If we have no valid results, try cache or return error
         if (validResults.length === 0) {

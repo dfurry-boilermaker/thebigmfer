@@ -2,7 +2,7 @@
 // Runs every 15 minutes during market hours to keep cache fresh
 // This prevents users from waiting for API calls
 
-const { loadManagersFromConfig, getBaselinePrices, getIntradayData, setCachedStockData, CACHE_KEYS, isMarketOpen, isDuringMarketHours } = require('../utils');
+const { loadManagersFromConfig, getBaselinePrices, computeManagerResult, setCachedStockData, CACHE_KEYS, isMarketOpen } = require('../utils');
 const YahooFinance = require('yahoo-finance2').default;
 const yahooFinance = new YahooFinance();
 
@@ -55,62 +55,11 @@ module.exports = async (req, res) => {
                 quoteMap[quote.symbol] = quote;
             });
             
-            const results = managers.map((manager, index) => {
-                const symbol = manager.stockSymbol;
-                const quote = quoteMap[symbol];
-                const baselinePrice = baselinePrices[index];
-                
-                if (!quote || !baselinePrice) {
-                    return {
-                        name: manager.name,
-                        symbol: symbol,
-                        currentPrice: 0,
-                        changePercent: null,
-                        change1d: null,
-                        change1m: null,
-                        change3m: null
-                    };
-                }
-                
-                const currentPrice = quote.regularMarketPrice || quote.price || quote.regularMarketPreviousClose || 0;
-                const previousClose = quote.regularMarketPreviousClose || baselinePrice || currentPrice;
-                
-                const ytdChange = baselinePrice > 0 
-                    ? ((currentPrice - baselinePrice) / baselinePrice) * 100 
-                    : 0;
-                
-                let change1d = null;
-                if (previousClose && previousClose > 0) {
-                    change1d = ((currentPrice - previousClose) / previousClose) * 100;
-                } else if (baselinePrice && baselinePrice > 0) {
-                    change1d = ((currentPrice - baselinePrice) / baselinePrice) * 100;
-                }
-                
-                const today = new Date();
-                const yearStart = new Date(2026, 0, 1);
-                const daysSinceStart = Math.floor((today - yearStart) / (1000 * 60 * 60 * 24));
-                
-                let change1m = null;
-                let change3m = null;
-                
-                if (daysSinceStart >= 30) {
-                    // Placeholder - could fetch historical data
-                }
-                
-                if (daysSinceStart >= 90) {
-                    // Placeholder - could fetch historical data
-                }
-                
-                return {
-                    name: manager.name,
-                    symbol: symbol,
-                    currentPrice: currentPrice,
-                    changePercent: ytdChange,
-                    change1d: change1d,
-                    change1m: change1m,
-                    change3m: change3m
-                };
-            });
+            // Same computation as /api/stocks/current so cron-refreshed cache
+            // includes dividends, 1m/3m changes, and analyses
+            const results = await Promise.all(managers.map((manager, index) =>
+                computeManagerResult(manager, quoteMap[manager.stockSymbol], baselinePrices[index])
+            ));
             
             results.sort((a, b) => {
                 const aPercent = a.changePercent || -Infinity;

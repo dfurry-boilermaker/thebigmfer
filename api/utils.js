@@ -260,20 +260,51 @@ function shouldUseCacheSync() {
 }
 
 // Load managers from JSON file
+const TICKER_PATTERN = /^[A-Z0-9.\-]{1,10}$/i;
+
 function loadManagersFromConfig() {
+    // In Vercel, __dirname points to the api directory, so go up one level
+    const configPath = path.join(process.cwd(), 'managers.json');
     try {
-        // In Vercel, __dirname points to the api directory, so go up one level
-        const configPath = path.join(process.cwd(), 'managers.json');
         const configData = fs.readFileSync(configPath, 'utf8');
-        return JSON.parse(configData);
+        const parsed = JSON.parse(configData);
+
+        if (!Array.isArray(parsed)) {
+            console.error('managers.json must contain a JSON array of manager entries');
+            return [];
+        }
+
+        const valid = parsed.filter(entry => {
+            const ok = entry
+                && typeof entry.name === 'string' && entry.name.trim() !== ''
+                && typeof entry.stockSymbol === 'string' && TICKER_PATTERN.test(entry.stockSymbol);
+            if (!ok) {
+                console.error('Skipping invalid manager entry in managers.json:', JSON.stringify(entry));
+            }
+            return ok;
+        });
+
+        if (valid.length === 0) {
+            console.error('managers.json contains no valid manager entries');
+        }
+        return valid;
     } catch (error) {
-        console.error('Error loading managers.json:', error);
+        console.error(`Failed to load managers.json (${configPath}):`, error.message);
         return [];
     }
 }
 
+// Memo for historical closing prices: closes for past dates never change,
+// so they're safe to cache for the lifetime of the process
+const historicalPriceCache = new Map(); // `${symbol}|${targetDate}` -> price
+
 // Get historical price for a specific date
 async function getHistoricalPrice(symbol, targetDate) {
+    const cacheKey = `${symbol}|${targetDate}`;
+    const isPastDate = new Date(targetDate).getTime() < new Date().setHours(0, 0, 0, 0);
+    if (isPastDate && historicalPriceCache.has(cacheKey)) {
+        return historicalPriceCache.get(cacheKey);
+    }
     try {
         const targetTimestamp = new Date(targetDate).getTime() / 1000;
         // Fetch a few days around the target date to handle weekends/holidays
@@ -293,12 +324,13 @@ async function getHistoricalPrice(symbol, targetDate) {
                     bestQuote = quote;
                 }
             }
-            if (bestQuote) {
-                return bestQuote.close;
-            }
-            // Fallback: return the first available close price
+            // Fallback: use the first available close price
             const firstValid = chartData.quotes.find(q => q.close !== null);
-            return firstValid ? firstValid.close : null;
+            const price = bestQuote ? bestQuote.close : (firstValid ? firstValid.close : null);
+            if (isPastDate && price !== null) {
+                historicalPriceCache.set(cacheKey, price);
+            }
+            return price;
         }
         return null;
     } catch (error) {
@@ -343,63 +375,141 @@ async function getBaselinePrices(symbols) {
     return baselinePrices;
 }
 
-// Get YTD dividends for a symbol (dividends paid since Jan 1, 2026)
+// Per-symbol dividend cache: dividends change at most quarterly, so 24h is plenty
+const dividendCache = new Map(); // symbol -> { totalDividends, fetchedAt }
+const DIVIDEND_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+// Get YTD dividends for a symbol (actual dividends with an ex-date since Jan 1, 2026),
+// returned as a percentage of the baseline price
 async function getYTDDividends(symbol, baselinePrice) {
-    try {
-        // Fetch dividend information from quoteSummary
-        const quoteSummary = await yahooFinance.quoteSummary(symbol, {
-            modules: ['summaryDetail', 'calendarEvents']
-        });
-        
-        if (!quoteSummary || !quoteSummary.summaryDetail) {
-            return 0;
-        }
-        
-        const summaryDetail = quoteSummary.summaryDetail;
-        const calendarEvents = quoteSummary.calendarEvents;
-        
-        // Get annual dividend rate
-        const annualDividendRate = summaryDetail.dividendRate || summaryDetail.trailingAnnualDividendRate || 0;
-        
-        if (annualDividendRate === 0) {
-            return 0; // No dividends
-        }
-        
-        // Calculate YTD dividends based on quarterly payments
-        const today = new Date();
-        const yearStart = new Date(2026, 0, 1);
-        const daysSinceStart = Math.floor((today - yearStart) / (1000 * 60 * 60 * 24));
-        
-        // Most stocks pay quarterly (4 times per year)
-        const estimatedDividendFrequency = 4;
-        const dividendPerPeriod = annualDividendRate / estimatedDividendFrequency;
-        
-        // Calculate how many dividend periods have passed
-        // Quarterly payments: Q1 (end of March), Q2 (end of June), Q3 (end of Sept), Q4 (end of Dec)
-        let dividendsPaid = 0;
-        if (daysSinceStart >= 90) dividendsPaid += dividendPerPeriod;  // After Q1
-        if (daysSinceStart >= 181) dividendsPaid += dividendPerPeriod; // After Q2
-        if (daysSinceStart >= 273) dividendsPaid += dividendPerPeriod; // After Q3
-        
-        // Check if there's an ex-dividend date that has already passed
-        if (calendarEvents?.exDividendDate) {
-            const exDividendDate = new Date(calendarEvents.exDividendDate);
-            if (exDividendDate >= yearStart && exDividendDate <= today && calendarEvents.dividendDate) {
-                const dividendPaymentDate = new Date(calendarEvents.dividendDate);
-                if (dividendPaymentDate <= today) {
-                    dividendsPaid += dividendPerPeriod;
-                }
-            }
-        }
-        
-        // Convert dividend amount to percentage of baseline price
-        const dividendYield = baselinePrice > 0 ? (dividendsPaid / baselinePrice) * 100 : 0;
-        
-        return dividendYield;
-    } catch (error) {
-        // Return 0 if we can't fetch dividends (non-critical error)
+    if (!baselinePrice || baselinePrice <= 0) {
         return 0;
     }
+
+    const cached = dividendCache.get(symbol);
+    if (cached && (Date.now() - cached.fetchedAt) < DIVIDEND_CACHE_TTL_MS) {
+        return (cached.totalDividends / baselinePrice) * 100;
+    }
+
+    try {
+        const result = await yahooFinance.chart(symbol, {
+            period1: '2026-01-01',
+            period2: Math.floor(Date.now() / 1000),
+            interval: '1d',
+            events: 'div'
+        });
+
+        // chart() may return dividends as an array or keyed by timestamp
+        const rawDividends = result?.events?.dividends;
+        const dividends = Array.isArray(rawDividends) ? rawDividends : Object.values(rawDividends || {});
+        const yearStart = new Date(2026, 0, 1);
+
+        const totalDividends = dividends
+            .filter(div => div && typeof div.amount === 'number' && new Date(div.date) >= yearStart)
+            .reduce((sum, div) => sum + div.amount, 0);
+
+        dividendCache.set(symbol, { totalDividends, fetchedAt: Date.now() });
+
+        return (totalDividends / baselinePrice) * 100;
+    } catch (error) {
+        // Non-critical: leaderboard falls back to price-only return for this symbol
+        console.warn(`Could not fetch dividend history for ${symbol}:`, error.message);
+        return 0;
+    }
+}
+
+// Compute the full leaderboard entry for one manager from a live quote.
+// Shared by api/stocks/current.js, server.js, and the cache-refresh cron so the
+// three paths can never drift apart.
+async function computeManagerResult(manager, quote, baselinePrice) {
+    const symbol = manager.stockSymbol;
+
+    if (!quote || !baselinePrice) {
+        return {
+            name: manager.name,
+            symbol: symbol,
+            currentPrice: 0,
+            changePercent: null,
+            change1d: null,
+            change1w: null,
+            change1m: null,
+            change3m: null,
+            analysis: manager.analysis || null
+        };
+    }
+
+    const currentPrice = quote.regularMarketPrice || quote.price || quote.regularMarketPreviousClose || 0;
+    const previousClose = quote.regularMarketPreviousClose || baselinePrice || currentPrice;
+
+    // YTD total return = price appreciation + dividends paid since Jan 1, 2026
+    const ytdPriceChange = baselinePrice > 0
+        ? ((currentPrice - baselinePrice) / baselinePrice) * 100
+        : 0;
+    const ytdDividendYield = await getYTDDividends(symbol, baselinePrice);
+    const ytdChange = ytdPriceChange + ytdDividendYield;
+
+    let change1d = null;
+    if (previousClose && previousClose > 0) {
+        change1d = ((currentPrice - previousClose) / previousClose) * 100;
+    } else if (baselinePrice && baselinePrice > 0) {
+        // Use baseline if previousClose not available (first trading day)
+        change1d = ((currentPrice - baselinePrice) / baselinePrice) * 100;
+    }
+
+    const yearStart = new Date(2026, 0, 1);
+    const today = new Date();
+    const daysSinceStart = Math.floor((today - yearStart) / (1000 * 60 * 60 * 24));
+
+    let change1w = null;
+    let change1m = null;
+    let change3m = null;
+
+    if (daysSinceStart >= 7) {
+        const oneWeekAgo = new Date(today);
+        oneWeekAgo.setDate(today.getDate() - 7);
+        const oneWeekPrice = await getHistoricalPrice(symbol, oneWeekAgo.toISOString().split('T')[0]);
+        if (oneWeekPrice && oneWeekPrice > 0) {
+            change1w = ((currentPrice - oneWeekPrice) / oneWeekPrice) * 100;
+        }
+    }
+
+    if (daysSinceStart >= 30) {
+        const oneMonthAgo = new Date(today);
+        oneMonthAgo.setDate(today.getDate() - 30);
+        const oneMonthPrice = await getHistoricalPrice(symbol, oneMonthAgo.toISOString().split('T')[0]);
+        if (oneMonthPrice && oneMonthPrice > 0) {
+            change1m = ((currentPrice - oneMonthPrice) / oneMonthPrice) * 100;
+        }
+    }
+
+    if (daysSinceStart >= 90) {
+        const threeMonthsAgo = new Date(today);
+        threeMonthsAgo.setDate(today.getDate() - 90);
+        const threeMonthPrice = await getHistoricalPrice(symbol, threeMonthsAgo.toISOString().split('T')[0]);
+        if (threeMonthPrice && threeMonthPrice > 0) {
+            change3m = ((currentPrice - threeMonthPrice) / threeMonthPrice) * 100;
+        }
+    }
+
+    return {
+        name: manager.name,
+        symbol: symbol,
+        currentPrice: currentPrice,
+        changePercent: ytdChange,
+        change1d: change1d,
+        change1w: change1w,
+        change1m: change1m,
+        change3m: change3m,
+        analysis: manager.analysis || null
+    };
+}
+
+// Detect Yahoo Finance rate-limit errors. yahoo-finance2's HTTPError sets
+// error.code to the HTTP status; string match kept as a fallback.
+function isRateLimitError(error) {
+    if (!error) return false;
+    if (error.code === 429 || error.status === 429) return true;
+    return typeof error.message === 'string' && /too many requests|rate limit/i.test(error.message);
 }
 
 // Get intraday/hourly data for a symbol
@@ -483,237 +593,14 @@ async function getIntradayData(symbol, startDate, endDate, interval = '1h') {
         return null;
     }
 }
-
-// Generate mock chart data with hourly granularity
-function generateMockChartData() {
-    const managers = loadManagersFromConfig();
-    
-    // Mock data goes up to today (or a recent date)
-    const today = new Date();
-    const mockEndDate = new Date(today);
-    // For demo purposes, set to a future date (e.g., 2 weeks from now)
-    mockEndDate.setDate(mockEndDate.getDate() + 14);
-    
-    const firstTradingDay = new Date(2026, 0, 2); // Jan 2, 2026
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    
-    // Generate month labels
-    const monthLabels = [];
-    const currentMonth = mockEndDate.getMonth();
-    const currentDay = mockEndDate.getDate();
-    for (let i = 0; i < currentMonth; i++) {
-        monthLabels.push(months[i]);
-    }
-    if (currentMonth >= 0) {
-        monthLabels.push(`${months[currentMonth]} ${currentDay}`);
-    }
-    
-    // Define unique performance patterns for each stock with realistic characteristics
-    const stockPatterns = [
-        // Daniel - NBIS: Strong start, then moderate growth with some volatility
-        { base: 0, trend: 0.15, volatility: 0.08, momentum: 0.02 },
-        // Sam - NVDA: High volatility tech stock with big swings
-        { base: 0, trend: 0.20, volatility: 0.15, momentum: 0.03 },
-        // Szklarek - WY: Steady consistent growth, low volatility
-        { base: 0, trend: 0.10, volatility: 0.04, momentum: 0.01 },
-        // Cale - NVO: Strong upward trend with moderate volatility
-        { base: 0, trend: 0.18, volatility: 0.06, momentum: 0.025 },
-        // Charlie - TSLA: High volatility, big moves, some negative periods
-        { base: 0, trend: 0.08, volatility: 0.12, momentum: -0.01 },
-        // Kruse - AMTM: Slow and steady, very low volatility
-        { base: 0, trend: 0.08, volatility: 0.03, momentum: 0.008 },
-        // Kyle - PLTR: Tech growth with corrections, high volatility
-        { base: 0, trend: 0.22, volatility: 0.10, momentum: 0.02 },
-        // Adam - JPM: Financial sector, moderate growth, moderate volatility
-        { base: 0, trend: 0.12, volatility: 0.05, momentum: 0.015 },
-        // Carson - AMZN: E-commerce giant, steady climb, low volatility
-        { base: 0, trend: 0.14, volatility: 0.05, momentum: 0.018 },
-        // Grant - WM: Waste management, stable, very low volatility
-        { base: 0, trend: 0.09, volatility: 0.03, momentum: 0.01 },
-        // Nick - PM: Tobacco, defensive play, low volatility
-        { base: 0, trend: 0.07, volatility: 0.03, momentum: 0.008 },
-        // Pierino - CRCL: Circular economy, growth potential, moderate volatility
-        { base: 0, trend: 0.16, volatility: 0.07, momentum: 0.02 }
-    ];
-    
-    // Generate daily data with open and close prices (2 points per trading day)
-    const generateDailyData = (pattern, startDate, endDate) => {
-        const data = [];
-        const timestamps = [];
-        
-        let currentDate = new Date(startDate);
-        let currentValue = pattern.base;
-        let dayCount = 0;
-        
-        // Market hours: 9:30 AM - 4:00 PM ET
-        const marketOpenHour = 9;
-        const marketOpenMinute = 30;
-        const marketCloseHour = 16;
-        
-        while (currentDate <= endDate) {
-            const dayOfWeek = currentDate.getDay();
-            
-            // Only include weekdays (Monday = 1, Friday = 5)
-            if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-                // Calculate base value for this day with trend, momentum, and volatility
-                const daysSinceStart = dayCount;
-                const trendComponent = daysSinceStart * pattern.trend / 100;
-                const momentumComponent = daysSinceStart * pattern.momentum / 100;
-                const dailyVolatility = (Math.random() - 0.5) * pattern.volatility;
-                
-                const baseValue = pattern.base + trendComponent + momentumComponent + dailyVolatility;
-                
-                // Open price: base value with small random variation
-                const openVariation = (Math.random() - 0.5) * pattern.volatility * 0.2;
-                const openPrice = baseValue + openVariation;
-                
-                // Close price: open price with intraday movement (can be up or down)
-                const intradayMove = (Math.random() - 0.5) * pattern.volatility * 0.8; // Larger variation for close
-                const closePrice = openPrice + intradayMove;
-                
-                // Open price timestamp (9:30 AM)
-                const openTimestamp = new Date(currentDate);
-                openTimestamp.setHours(marketOpenHour, marketOpenMinute, 0, 0);
-                
-                // Close price timestamp (4:00 PM)
-                const closeTimestamp = new Date(currentDate);
-                closeTimestamp.setHours(marketCloseHour, 0, 0, 0);
-                
-                // Add open price
-                data.push(parseFloat(openPrice.toFixed(2)));
-                timestamps.push(openTimestamp.getTime());
-                
-                // Add close price
-                data.push(parseFloat(closePrice.toFixed(2)));
-                timestamps.push(closeTimestamp.getTime());
-                
-                dayCount++;
-            }
-            
-            // Move to next day
-            currentDate.setDate(currentDate.getDate() + 1);
-        }
-        
-        return { data, timestamps };
-    };
-    
-    // Generate mock performance data for each stock
-    const stockData = managers.map((manager, index) => {
-        const symbol = manager.stockSymbol;
-        const pattern = stockPatterns[index] || stockPatterns[0];
-        
-        const { data, timestamps } = generateDailyData(pattern, firstTradingDay, mockEndDate);
-        
-        return {
-            name: manager.name,
-            symbol: symbol,
-            data: data,
-            timestamps: timestamps
-        };
-    });
-    
-    return {
-        months: monthLabels,
-        data: stockData
-    };
-}
-
-// Generate mock current stock data for leaderboard
-// This should match the latest values from the mock chart data
-function generateMockCurrentData() {
-    const managers = loadManagersFromConfig();
-    const today = new Date();
-    
-    // Calculate approximate YTD values based on the chart data patterns
-    // These are derived from the stock patterns and current date
-    // For mock data, simulate being a few weeks into 2026
-    const yearStart = new Date(2026, 0, 1);
-    const actualDaysSinceStart = Math.floor((today - yearStart) / (1000 * 60 * 60 * 24));
-    // If we're before 2026, use a simulated number of days (e.g., 14 days into 2026)
-    const daysSinceStart = actualDaysSinceStart < 0 ? 14 : Math.max(0, actualDaysSinceStart);
-    
-    // Stock patterns (same as in generateMockChartData)
-    const stockPatterns = [
-        { base: 0, trend: 0.15, volatility: 0.08, momentum: 0.02 },  // Daniel - NBIS
-        { base: 0, trend: 0.20, volatility: 0.15, momentum: 0.03 },  // Sam - NVDA
-        { base: 0, trend: 0.10, volatility: 0.04, momentum: 0.01 }, // Szklarek - WY
-        { base: 0, trend: 0.18, volatility: 0.06, momentum: 0.025 }, // Cale - NVO
-        { base: 0, trend: 0.08, volatility: 0.12, momentum: -0.01 }, // Charlie - TSLA
-        { base: 0, trend: 0.08, volatility: 0.03, momentum: 0.008 }, // Kruse - AMTM
-        { base: 0, trend: 0.22, volatility: 0.10, momentum: 0.02 },  // Kyle - PLTR
-        { base: 0, trend: 0.12, volatility: 0.05, momentum: 0.015 }, // Adam - JPM
-        { base: 0, trend: 0.14, volatility: 0.05, momentum: 0.018 }, // Carson - AMZN
-        { base: 0, trend: 0.09, volatility: 0.03, momentum: 0.01 },  // Grant - WM
-        { base: 0, trend: 0.07, volatility: 0.03, momentum: 0.008 }, // Nick - PM
-        { base: 0, trend: 0.16, volatility: 0.07, momentum: 0.02 }   // Pierino - CRCL
-    ];
-    
-    // Generate mock data for each manager
-    const results = managers.map((manager, index) => {
-        const symbol = manager.stockSymbol;
-        const pattern = stockPatterns[index] || stockPatterns[0];
-        
-        // Calculate YTD percentage based on pattern
-        const trendComponent = daysSinceStart * pattern.trend / 100;
-        const momentumComponent = daysSinceStart * pattern.momentum / 100;
-        const dailyVolatility = (Math.random() - 0.5) * pattern.volatility;
-        const ytdPercent = pattern.base + trendComponent + momentumComponent + dailyVolatility;
-        
-        // Calculate mock prices (using a base price and YTD change)
-        const basePrice = 100; // Base price for calculation
-        const currentPrice = basePrice * (1 + ytdPercent / 100);
-        
-        // Calculate 1d change (small variation from YTD, typically close to YTD early in year)
-        const change1d = ytdPercent + (Math.random() - 0.5) * 0.3;
-        
-        // Calculate 1m and 3m (only if enough time has passed)
-        let change1m = null;
-        let change3m = null;
-        
-        if (daysSinceStart >= 30) {
-            // Approximate 1m as slightly less than YTD (since we're early in the year)
-            const oneMonthTrend = Math.max(0, daysSinceStart - 30) * pattern.trend / 100;
-            const oneMonthMomentum = Math.max(0, daysSinceStart - 30) * pattern.momentum / 100;
-            change1m = pattern.base + oneMonthTrend + oneMonthMomentum + (Math.random() - 0.5) * pattern.volatility;
-        }
-        
-        if (daysSinceStart >= 90) {
-            // Approximate 3m as proportionally less than YTD
-            const threeMonthTrend = Math.max(0, daysSinceStart - 90) * pattern.trend / 100;
-            const threeMonthMomentum = Math.max(0, daysSinceStart - 90) * pattern.momentum / 100;
-            change3m = pattern.base + threeMonthTrend + threeMonthMomentum + (Math.random() - 0.5) * pattern.volatility;
-        }
-        
-        return {
-            name: manager.name,
-            symbol: symbol,
-            currentPrice: parseFloat(currentPrice.toFixed(2)),
-            changePercent: parseFloat(ytdPercent.toFixed(2)),
-            change1d: parseFloat(change1d.toFixed(2)),
-            change1m: change1m !== null ? parseFloat(change1m.toFixed(2)) : null,
-            change3m: change3m !== null ? parseFloat(change3m.toFixed(2)) : null,
-            analysis: manager.analysis || null // Include analysis from managers.json
-        };
-    });
-    
-    // Sort by YTD percentage (descending)
-    results.sort((a, b) => {
-        const aPercent = a.changePercent || -Infinity;
-        const bPercent = b.changePercent || -Infinity;
-        return bPercent - aPercent;
-    });
-    
-    return results;
-}
-
 module.exports = {
     loadManagersFromConfig,
     getHistoricalPrice,
     getBaselinePrices,
     getYTDDividends,
+    computeManagerResult,
+    isRateLimitError,
     getIntradayData,
-    generateMockChartData,
-    generateMockCurrentData,
     isMarketOpen,
     isDuringMarketHours,
     isTradingDay,

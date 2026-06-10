@@ -13,14 +13,6 @@ const {
 // Delay helper to avoid rate limiting
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-// Pick a consistent interval based on how far into the year we are.
-// Month 0-1 (Jan-Feb): daily; Month 2-5 (Mar-Jun): weekly; Month 6+ (Jul-Dec): monthly.
-function ytdInterval(currentMonth) {
-    if (currentMonth <= 1) return '1d';
-    if (currentMonth <= 5) return '1wk';
-    return '1mo';
-}
-
 // Fetch and process data for a single stock
 async function fetchStockChartData(manager, baselinePrice, firstTradingDay, todayEnd, interval) {
     const symbol = manager.stockSymbol;
@@ -92,7 +84,9 @@ module.exports = async (req, res) => {
         for (let i = 0; i < currentMonth; i++) monthLabels.push(months[i]);
         monthLabels.push(`${months[currentMonth]} ${currentDay}`);
 
-        const interval = ytdInterval(currentMonth);
+        // Daily data year-round: a full year is only ~252 points per stock, and the
+        // frontend needs daily granularity for weekly rank deltas and days-in-lead
+        const interval = '1d';
 
         // Fetch stocks in batches of 4 with delay between batches to avoid rate limiting
         const BATCH_SIZE = 4;

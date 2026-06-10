@@ -24,6 +24,7 @@ function toggleTheme() {
     if (performanceChart && window.lastChartData && window.lastLeaderboardData) {
         renderChart(window.lastChartData, window.lastLeaderboardData);
         renderZoomedChart(window.lastChartData, window.lastLeaderboardData);
+        renderBumpChart(window.lastChartData, window.lastLeaderboardData);
         renderStats(window.lastChartData, window.lastLeaderboardData);
     }
 }
@@ -41,361 +42,6 @@ document.addEventListener('DOMContentLoaded', () => {
         themeToggle.addEventListener('click', toggleTheme);
     }
 });
-
-// Mock data for testing (hardcoded managers list)
-const MOCK_MANAGERS = [
-    { name: "Daniel", stockSymbol: "NBIS" },
-    { name: "Sam", stockSymbol: "NVDA" },
-    { name: "Szklarek", stockSymbol: "WY" },
-    { name: "Cale", stockSymbol: "NVO" },
-    { name: "Charlie", stockSymbol: "TSLA" },
-    { name: "Kruse", stockSymbol: "AMTM" },
-    { name: "Kyle", stockSymbol: "PLTR" },
-    { name: "Adam", stockSymbol: "JPM" },
-    { name: "Carson", stockSymbol: "AMZN" },
-    { name: "Grant", stockSymbol: "WM" },
-    { name: "Nick", stockSymbol: "PM" },
-    { name: "Pierino", stockSymbol: "CRCL" }
-];
-
-// Generate fake leaderboard data
-function generateMockLeaderboardData() {
-    const today = new Date();
-    const yearStart = new Date(2026, 0, 1);
-    const actualDaysSinceStart = Math.floor((today - yearStart) / (1000 * 60 * 60 * 24));
-    const daysSinceStart = actualDaysSinceStart < 0 ? 14 : Math.max(0, actualDaysSinceStart);
-    
-    // Stock patterns (matching chart patterns) - trend is now annual return multiplier
-    // Best performer (Kyle - PLTR) should reach 110% by end of year
-    // 2 stocks are negative: Charlie (TSLA) and Nick (PM)
-    const stockPatterns = [
-        { base: 0, trend: 0.75, volatility: 0.40, momentum: 0.10 },  // Daniel - NBIS (75% annual)
-        { base: 0, trend: 1.00, volatility: 0.75, momentum: 0.15 },  // Sam - NVDA (100% annual)
-        { base: 0, trend: 0.50, volatility: 0.20, momentum: 0.05 }, // Szklarek - WY (50% annual)
-        { base: 0, trend: 0.90, volatility: 0.30, momentum: 0.125 }, // Cale - NVO (90% annual)
-        { base: 0, trend: -0.20, volatility: 0.60, momentum: -0.05 }, // Charlie - TSLA (-20% annual - NEGATIVE)
-        { base: 0, trend: 0.40, volatility: 0.15, momentum: 0.04 }, // Kruse - AMTM (40% annual)
-        { base: 0, trend: 1.10, volatility: 0.50, momentum: 0.10 },  // Kyle - PLTR (110% annual - best performer)
-        { base: 0, trend: 0.60, volatility: 0.25, momentum: 0.075 }, // Adam - JPM (60% annual)
-        { base: 0, trend: 0.70, volatility: 0.25, momentum: 0.09 }, // Carson - AMZN (70% annual)
-        { base: 0, trend: 0.45, volatility: 0.15, momentum: 0.05 },  // Grant - WM (45% annual)
-        { base: 0, trend: -0.15, volatility: 0.15, momentum: -0.02 }, // Nick - PM (-15% annual - NEGATIVE)
-        { base: 0, trend: 0.80, volatility: 0.35, momentum: 0.10 }   // Pierino - CRCL (80% annual)
-    ];
-    
-    const results = MOCK_MANAGERS.map((manager, index) => {
-        const symbol = manager.stockSymbol;
-        const pattern = stockPatterns[index] || stockPatterns[0];
-        
-        // Calculate YTD percentage based on pattern (less random)
-        // Scale to ensure best performer reaches 100%+ over full year (~252 trading days)
-        // pattern.trend is now a multiplier for annual return (1.10 = 110% annual)
-        const tradingDaysPerYear = 252;
-        const annualReturn = pattern.trend; // e.g., 1.10 = 110%
-        const dailyReturn = annualReturn / tradingDaysPerYear; // Convert to daily
-        const trendComponent = daysSinceStart * dailyReturn;
-        
-        const momentumComponent = daysSinceStart * pattern.momentum / 100;
-        // Reduce volatility by 70% for more consistent data
-        const dailyVolatility = (Math.random() - 0.5) * pattern.volatility * 0.3;
-        const ytdPercent = (pattern.base + trendComponent + momentumComponent + dailyVolatility) * 100;
-        
-        // Calculate mock prices
-        const basePrice = 100;
-        const currentPrice = basePrice * (1 + ytdPercent / 100);
-        
-        // Calculate 1d change (much smaller variation, closer to YTD)
-        const change1d = ytdPercent + (Math.random() - 0.5) * 0.1;
-        
-        // Calculate 1m and 3m (only if enough time has passed)
-        let change1m = null;
-        let change3m = null;
-        
-        if (daysSinceStart >= 30) {
-            const oneMonthTrend = Math.max(0, daysSinceStart - 30) * pattern.trend / 100;
-            const oneMonthMomentum = Math.max(0, daysSinceStart - 30) * pattern.momentum / 100;
-            // Reduce volatility for 1m calculation
-            change1m = (pattern.base + oneMonthTrend + oneMonthMomentum + (Math.random() - 0.5) * pattern.volatility * 0.3) * 100;
-        }
-        
-        if (daysSinceStart >= 90) {
-            const threeMonthTrend = Math.max(0, daysSinceStart - 90) * pattern.trend / 100;
-            const threeMonthMomentum = Math.max(0, daysSinceStart - 90) * pattern.momentum / 100;
-            // Reduce volatility for 3m calculation
-            change3m = (pattern.base + threeMonthTrend + threeMonthMomentum + (Math.random() - 0.5) * pattern.volatility * 0.3) * 100;
-        }
-        
-        return {
-            name: manager.name,
-            symbol: symbol,
-            currentPrice: parseFloat(currentPrice.toFixed(2)),
-            changePercent: parseFloat(ytdPercent.toFixed(2)),
-            change1d: parseFloat(change1d.toFixed(2)),
-            change1m: change1m !== null ? parseFloat(change1m.toFixed(2)) : null,
-            change3m: change3m !== null ? parseFloat(change3m.toFixed(2)) : null,
-            analysis: manager.analysis || null // Include analysis from MOCK_MANAGERS
-        };
-    });
-    
-    // Sort by YTD percentage (descending)
-    results.sort((a, b) => {
-        const aPercent = a.changePercent || -Infinity;
-        const bPercent = b.changePercent || -Infinity;
-        return bPercent - aPercent;
-    });
-    
-    return results;
-}
-
-// Generate fake chart data - takes optional leaderboardData to ensure exact match
-function generateMockChartData(leaderboardDataForSync = null) {
-    // Extend mock data to show more of the year (e.g., 6 months into 2026)
-    // This allows the best performing stock to reach 100%+
-    const mockEndDate = new Date(2026, 5, 15); // June 15, 2026
-    
-    const firstTradingDay = new Date(2026, 0, 2); // Jan 2, 2026
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    
-    // Generate month labels
-    const monthLabels = [];
-    const currentMonth = mockEndDate.getMonth();
-    const currentDay = mockEndDate.getDate();
-    for (let i = 0; i < currentMonth; i++) {
-        monthLabels.push(months[i]);
-    }
-    if (currentMonth >= 0) {
-        monthLabels.push(`${months[currentMonth]} ${currentDay}`);
-    }
-    
-    // Stock patterns (same as leaderboard) - scaled up for higher amplitude
-    // 2 stocks are negative: Charlie (TSLA) and Nick (PM)
-    const stockPatterns = [
-        { base: 0, trend: 0.75, volatility: 0.40, momentum: 0.10 },
-        { base: 0, trend: 1.00, volatility: 0.75, momentum: 0.15 },
-        { base: 0, trend: 0.50, volatility: 0.20, momentum: 0.05 },
-        { base: 0, trend: 0.90, volatility: 0.30, momentum: 0.125 },
-        { base: 0, trend: -0.20, volatility: 0.60, momentum: -0.05 }, // Charlie - TSLA (-20% annual - NEGATIVE)
-        { base: 0, trend: 0.40, volatility: 0.15, momentum: 0.04 },
-        { base: 0, trend: 1.10, volatility: 0.50, momentum: 0.10 },
-        { base: 0, trend: 0.60, volatility: 0.25, momentum: 0.075 },
-        { base: 0, trend: 0.70, volatility: 0.25, momentum: 0.09 },
-        { base: 0, trend: 0.45, volatility: 0.15, momentum: 0.05 },
-        { base: 0, trend: -0.15, volatility: 0.15, momentum: -0.02 }, // Nick - PM (-15% annual - NEGATIVE)
-        { base: 0, trend: 0.80, volatility: 0.35, momentum: 0.10 }
-    ];
-    
-    // Generate weekly data points (one per week, Friday close) from Jan 2, 2026 to mock end date
-    // Helper function to check if a date is a trading day (weekday and not a holiday)
-    const isTradingDay = (date) => {
-        const day = date.getDay(); // 0 = Sunday, 6 = Saturday
-        
-        // Exclude weekends
-        if (day === 0 || day === 6) {
-            return false;
-        }
-        
-        // Check if it's a market holiday in 2026
-        const month = date.getMonth();
-        const dayOfMonth = date.getDate();
-        
-        // 2026 US Market Holidays (NYSE/NASDAQ)
-        const holidays2026 = [
-            { month: 0, day: 1 },   // New Year's Day (Jan 1)
-            { month: 0, day: 19 },  // Martin Luther King Jr. Day (Jan 19 - 3rd Monday)
-            { month: 1, day: 16 },  // Presidents' Day (Feb 16 - 3rd Monday)
-            { month: 3, day: 3 },   // Good Friday (Apr 3)
-            { month: 4, day: 25 },  // Memorial Day (May 25 - last Monday)
-            { month: 6, day: 3 },   // Independence Day (Jul 3 - observed, since Jul 4 is Saturday)
-            { month: 8, day: 7 },   // Labor Day (Sep 7 - 1st Monday)
-            { month: 10, day: 11 }, // Veterans Day (Nov 11)
-            { month: 10, day: 26 }, // Thanksgiving (Nov 26 - 4th Thursday)
-            { month: 11, day: 25 }  // Christmas (Dec 25)
-        ];
-        
-        // Check if date matches any holiday
-        for (const holiday of holidays2026) {
-            if (holiday.month === month && holiday.day === dayOfMonth) {
-                return false;
-            }
-        }
-        
-        return true;
-    };
-    
-    const generateWeeklyData = (pattern, startDate, endDate) => {
-        const data = [];
-        const timestamps = [];
-        
-        // Start from the first trading day
-        let currentDate = new Date(startDate);
-        
-        // Find the first trading day (skip weekends and holidays)
-        while (!isTradingDay(currentDate) && currentDate <= endDate) {
-            currentDate.setDate(currentDate.getDate() + 1);
-        }
-        
-        let weekCount = 0;
-        const marketCloseHour = 16;
-        let tradingDayCount = 0;
-        
-        while (currentDate <= endDate) {
-            // Only add data for trading days
-            if (isTradingDay(currentDate)) {
-                // Calculate actual days since start (same as leaderboard calculation)
-                const daysSinceStart = Math.floor((currentDate - startDate) / (1000 * 60 * 60 * 24));
-                
-                // Scale to ensure best performer reaches 100%+ over full year (~252 trading days)
-                // pattern.trend is now a multiplier for annual return (1.10 = 110% annual)
-                // Use same calculation as leaderboard for consistency
-                const tradingDaysPerYear = 252;
-                const annualReturn = pattern.trend; // e.g., 1.10 = 110%
-                const dailyReturn = annualReturn / tradingDaysPerYear; // Convert to daily
-                const trendComponent = tradingDayCount * dailyReturn;
-                const momentumComponent = tradingDayCount * pattern.momentum / 100;
-                
-                // Generate weekly close price - use week count for pattern
-                const weekSeed = weekCount * 0.1;
-                const randomFactor = (Math.sin(weekSeed) + Math.cos(weekSeed * 1.3)) * 0.3;
-                let weeklyValue = (pattern.base + trendComponent + momentumComponent + randomFactor * pattern.volatility * 0.3) * 100;
-                weeklyValue = parseFloat(weeklyValue.toFixed(2));
-                
-                const weeklyTimestamp = new Date(currentDate);
-                weeklyTimestamp.setHours(marketCloseHour, 0, 0, 0);
-                
-                data.push(weeklyValue);
-                timestamps.push(weeklyTimestamp.getTime());
-                
-                tradingDayCount++;
-            }
-            
-            // Move to next day
-            currentDate.setDate(currentDate.getDate() + 1);
-            
-            // Increment week count every 7 days (for pattern generation)
-            if (currentDate.getDay() === 1) { // Monday
-                weekCount++;
-            }
-        }
-        
-        return { data, timestamps };
-    };
-    
-    // Use provided leaderboard data or generate it
-    const leaderboardData = leaderboardDataForSync || generateMockLeaderboardDataForDate(mockEndDate);
-    const leaderboardMap = {};
-    leaderboardData.forEach(stock => {
-        leaderboardMap[stock.symbol] = stock.changePercent;
-    });
-    
-    const stockData = MOCK_MANAGERS.map((manager, index) => {
-        const symbol = manager.stockSymbol;
-        const pattern = stockPatterns[index] || stockPatterns[0];
-        
-        const { data, timestamps } = generateWeeklyData(pattern, firstTradingDay, mockEndDate);
-        
-        // Replace the last data point with the exact leaderboard YTD value
-        if (data.length > 0 && leaderboardMap[symbol] !== undefined) {
-            data[data.length - 1] = leaderboardMap[symbol];
-        }
-        
-        return {
-            name: manager.name,
-            symbol: symbol,
-            data: data,
-            timestamps: timestamps
-        };
-    });
-    
-    return {
-        months: monthLabels,
-        data: stockData,
-        mockEndDate: mockEndDate // Store end date for leaderboard sync
-    };
-}
-
-// Generate fake leaderboard data for a specific date (to match chart end date)
-function generateMockLeaderboardDataForDate(targetDate) {
-    const yearStart = new Date(2026, 0, 1);
-    const actualDaysSinceStart = Math.floor((targetDate - yearStart) / (1000 * 60 * 60 * 24));
-    const daysSinceStart = actualDaysSinceStart < 0 ? 14 : Math.max(0, actualDaysSinceStart);
-    
-    // Stock patterns (matching chart patterns) - trend is now annual return multiplier
-    // 2 stocks are negative: Charlie (TSLA) and Nick (PM)
-    const stockPatterns = [
-        { base: 0, trend: 0.75, volatility: 0.40, momentum: 0.10 },
-        { base: 0, trend: 1.00, volatility: 0.75, momentum: 0.15 },
-        { base: 0, trend: 0.50, volatility: 0.20, momentum: 0.05 },
-        { base: 0, trend: 0.90, volatility: 0.30, momentum: 0.125 },
-        { base: 0, trend: -0.20, volatility: 0.60, momentum: -0.05 }, // Charlie - TSLA (-20% annual - NEGATIVE)
-        { base: 0, trend: 0.40, volatility: 0.15, momentum: 0.04 },
-        { base: 0, trend: 1.10, volatility: 0.50, momentum: 0.10 },
-        { base: 0, trend: 0.60, volatility: 0.25, momentum: 0.075 },
-        { base: 0, trend: 0.70, volatility: 0.25, momentum: 0.09 },
-        { base: 0, trend: 0.45, volatility: 0.15, momentum: 0.05 },
-        { base: 0, trend: -0.15, volatility: 0.15, momentum: -0.02 }, // Nick - PM (-15% annual - NEGATIVE)
-        { base: 0, trend: 0.80, volatility: 0.35, momentum: 0.10 }
-    ];
-    
-    const results = MOCK_MANAGERS.map((manager, index) => {
-        const symbol = manager.stockSymbol;
-        const pattern = stockPatterns[index] || stockPatterns[0];
-        
-        // Calculate YTD percentage based on pattern (less random)
-        // Scale to ensure best performer reaches 100%+ over full year (~252 trading days)
-        const tradingDaysPerYear = 252;
-        const annualReturn = pattern.trend; // e.g., 1.10 = 110%
-        const dailyReturn = annualReturn / tradingDaysPerYear; // Convert to daily
-        const trendComponent = daysSinceStart * dailyReturn;
-        
-        const momentumComponent = daysSinceStart * pattern.momentum / 100;
-        // Reduce volatility by 70% for more consistent data
-        const dailyVolatility = (Math.random() - 0.5) * pattern.volatility * 0.3;
-        const ytdPercent = (pattern.base + trendComponent + momentumComponent + dailyVolatility) * 100;
-        
-        // Calculate mock prices
-        const basePrice = 100;
-        const currentPrice = basePrice * (1 + ytdPercent / 100);
-        
-        // Calculate 1d change (much smaller variation, closer to YTD)
-        const change1d = ytdPercent + (Math.random() - 0.5) * 0.1;
-        
-        // Calculate 1m and 3m (only if enough time has passed)
-        let change1m = null;
-        let change3m = null;
-        
-        if (daysSinceStart >= 30) {
-            const oneMonthTrend = Math.max(0, daysSinceStart - 30) * dailyReturn;
-            const oneMonthMomentum = Math.max(0, daysSinceStart - 30) * pattern.momentum / 100;
-            change1m = (pattern.base + oneMonthTrend + oneMonthMomentum + (Math.random() - 0.5) * pattern.volatility * 0.3) * 100;
-        }
-        
-        if (daysSinceStart >= 90) {
-            const threeMonthTrend = Math.max(0, daysSinceStart - 90) * dailyReturn;
-            const threeMonthMomentum = Math.max(0, daysSinceStart - 90) * pattern.momentum / 100;
-            change3m = (pattern.base + threeMonthTrend + threeMonthMomentum + (Math.random() - 0.5) * pattern.volatility * 0.3) * 100;
-        }
-        
-        return {
-            name: manager.name,
-            symbol: symbol,
-            currentPrice: parseFloat(currentPrice.toFixed(2)),
-            changePercent: parseFloat(ytdPercent.toFixed(2)),
-            change1d: parseFloat(change1d.toFixed(2)),
-            change1m: change1m !== null ? parseFloat(change1m.toFixed(2)) : null,
-            change3m: change3m !== null ? parseFloat(change3m.toFixed(2)) : null,
-            analysis: manager.analysis || null // Include analysis from MOCK_MANAGERS
-        };
-    });
-    
-    // Sort by YTD percentage (descending)
-    results.sort((a, b) => {
-        const aPercent = a.changePercent || -Infinity;
-        const bPercent = b.changePercent || -Infinity;
-        return bPercent - aPercent;
-    });
-    
-    return results;
-}
 
 // Load Leaderboard
 // LocalStorage cache keys
@@ -486,10 +132,10 @@ function extractAnalysesFromLeaderboardData(data) {
     data.forEach(item => {
         if (item && item.name) {
             // Check if analysis exists and is not the placeholder text
-            if (item.analysis && 
-                typeof item.analysis === 'string' && 
-                item.analysis.trim() !== '' && 
-                item.analysis !== 'Your analysis here. Explain why you picked ' + item.symbol + ' and your investment thesis in a couple of sentences.') {
+            if (item.analysis &&
+                typeof item.analysis === 'string' &&
+                item.analysis.trim() !== '' &&
+                !isPlaceholderAnalysis(item.analysis)) {
                 analyses[item.name] = {
                     stockSymbol: item.symbol,
                     analysis: item.analysis
@@ -606,6 +252,7 @@ function renderLeaderboard(data) {
         const rankClass = rank === 1 ? 'first' : rank === 2 ? 'second' : rank === 3 ? 'third' : '';
         
         const change1dClass = item.change1d !== null ? (item.change1d >= 0 ? 'positive' : 'negative') : '';
+        const change1wClass = item.change1w !== null && item.change1w !== undefined ? (item.change1w >= 0 ? 'positive' : 'negative') : '';
         const change1mClass = item.change1m !== null ? (item.change1m >= 0 ? 'positive' : 'negative') : '';
         const change3mClass = item.change3m !== null ? (item.change3m >= 0 ? 'positive' : 'negative') : '';
         const changeYTDClass = item.changePercent !== null ? (item.changePercent >= 0 ? 'positive' : 'negative') : '';
@@ -616,36 +263,69 @@ function renderLeaderboard(data) {
 
         // Get analysis for this manager
         // First check if analysis is directly on the item (from API), otherwise check managerAnalyses
-        let analysis = null;
+        let rawAnalysis = null;
         if (item.analysis && typeof item.analysis === 'string' && item.analysis.trim() !== '') {
-            // Analysis is directly on the item (new format from API)
-            analysis = {
-                stockSymbol: item.symbol,
-                analysis: item.analysis
-            };
+            rawAnalysis = item.analysis;
         } else if (managerAnalyses[item.name]) {
-            // Analysis is in managerAnalyses (extracted format)
-            analysis = managerAnalyses[item.name];
+            rawAnalysis = managerAnalyses[item.name].analysis;
         }
-        
-        const hasAnalysis = analysis && analysis.analysis && analysis.analysis.trim() !== '' && 
-                           analysis.analysis !== 'Your analysis here. Explain why you picked ' + item.symbol + ' and your investment thesis in a couple of sentences.';
-        
-        
+
+        // Placeholder rows stay expandable but show a graceful note instead of scaffold text
+        const hasAnalysis = !!rawAnalysis;
+        const isPlaceholder = isPlaceholderAnalysis(rawAnalysis);
+        const analysisBody = isPlaceholder ? 'Analysis coming soon.' : rawAnalysis;
+
+        // Rank change vs one week ago (from chart history)
+        let rankDeltaHtml = '';
+        const previousRank = dramaContext && dramaContext.ranksWeekAgo
+            ? dramaContext.ranksWeekAgo[item.symbol]
+            : undefined;
+        if (previousRank !== undefined) {
+            const delta = previousRank - rank;
+            if (delta > 0) {
+                rankDeltaHtml = `<span class="rank-delta up" aria-label="Up ${delta} place${delta === 1 ? '' : 's'} since last week">&#9650;${delta}</span>`;
+            } else if (delta < 0) {
+                rankDeltaHtml = `<span class="rank-delta down" aria-label="Down ${-delta} place${delta === -1 ? '' : 's'} since last week">&#9660;${-delta}</span>`;
+            }
+        }
+
+        // Leader shows days in lead; everyone else shows the gap to the rank above
+        let raceNoteHtml = '';
+        if (index === 0) {
+            const leadDays = dramaContext && dramaContext.daysInLead
+                ? dramaContext.daysInLead[item.symbol]
+                : null;
+            if (leadDays) {
+                raceNoteHtml = `<span class="race-note lead">${leadDays} day${leadDays === 1 ? '' : 's'} in lead</span>`;
+            }
+        } else if (item.changePercent !== null && data[index - 1].changePercent !== null) {
+            const gap = data[index - 1].changePercent - item.changePercent;
+            raceNoteHtml = `<span class="race-note">${gap.toFixed(1)} behind #${rank - 1}</span>`;
+        }
+
         const itemId = `leaderboard-item-${index}`;
         const analysisId = `analysis-${index}`;
+        const interactiveAttrs = hasAnalysis
+            ? `data-analysis-id="${analysisId}" role="button" tabindex="0" aria-expanded="false" aria-controls="${analysisId}"`
+            : '';
 
         return `
-            <div class="leaderboard-item ${rankClass} ${hasAnalysis ? 'clickable' : ''}" ${hasAnalysis ? `onclick="toggleAnalysis('${analysisId}')"` : ''} id="${itemId}">
+            <div class="leaderboard-item ${rankClass} ${hasAnalysis ? 'clickable' : ''}" id="${itemId}" data-manager-name="${escapeHtml(item.name)}" ${interactiveAttrs}>
                 <div class="rank">${rank}</div>
                 <div class="manager-info">
                     <span class="manager-name">${escapeHtml(item.name)}</span>
                     <span class="stock-symbol">${escapeHtml(item.symbol)}</span>
                     <span class="current-price">$${formatPrice(item.currentPrice)}</span>
+                    ${rankDeltaHtml}
+                    ${raceNoteHtml}
                     <div class="time-periods mobile-only">
                         <span class="time-period">
                             <span class="period-label">1d</span>
                             <span class="period-value ${item.change1d === null ? 'no-data' : change1dClass}">${item.change1d !== null ? getChangeSign(item.change1d) + formatPercent(item.change1d) + '%' : '-'}</span>
+                        </span>
+                        <span class="time-period">
+                            <span class="period-label">1w</span>
+                            <span class="period-value ${item.change1w === null || item.change1w === undefined ? 'no-data' : change1wClass}">${item.change1w !== null && item.change1w !== undefined ? getChangeSign(item.change1w) + formatPercent(item.change1w) + '%' : '-'}</span>
                         </span>
                         <span class="time-period">
                             <span class="period-label">1m</span>
@@ -678,6 +358,10 @@ function renderLeaderboard(data) {
                             <span class="period-value ${item.change1d === null ? 'no-data' : change1dClass}">${item.change1d !== null ? getChangeSign(item.change1d) + formatPercent(item.change1d) + '%' : '-'}</span>
                         </span>
                         <span class="time-period">
+                            <span class="period-label">1w</span>
+                            <span class="period-value ${item.change1w === null || item.change1w === undefined ? 'no-data' : change1wClass}">${item.change1w !== null && item.change1w !== undefined ? getChangeSign(item.change1w) + formatPercent(item.change1w) + '%' : '-'}</span>
+                        </span>
+                        <span class="time-period">
                             <span class="period-label">1m</span>
                             <span class="period-value ${item.change1m === null ? 'no-data' : change1mClass}">${item.change1m !== null ? getChangeSign(item.change1m) + formatPercent(item.change1m) + '%' : '-'}</span>
                         </span>
@@ -693,12 +377,17 @@ function renderLeaderboard(data) {
                 </div>
                 ${hasAnalysis ? `
                     <div class="analysis-content" id="${analysisId}">
-                        <div class="analysis-text">${escapeHtml(analysis.analysis)}</div>
+                        <div class="analysis-text ${isPlaceholder ? 'placeholder' : ''}">${escapeHtml(analysisBody)}</div>
                     </div>
                 ` : ''}
             </div>
         `;
     }).join('');
+
+    // Re-apply the #manager/Name route after innerHTML rebuilds; only scroll once
+    if (applyHashRoute(!hashScrollDone)) {
+        hashScrollDone = true;
+    }
 }
 
 // Toggle analysis dropdown (global for onclick handler)
@@ -711,16 +400,26 @@ window.toggleAnalysis = function(analysisId) {
         }
         
         const leaderboardItem = analysisContent.closest('.leaderboard-item');
-        
+        const managerName = leaderboardItem ? leaderboardItem.getAttribute('data-manager-name') : null;
+
         if (analysisContent.classList.contains('expanded')) {
             analysisContent.classList.remove('expanded');
             if (leaderboardItem) {
                 leaderboardItem.setAttribute('aria-expanded', 'false');
             }
+            // Clear the deep-link hash only if it points at this manager
+            if (managerName && location.hash === '#manager/' + encodeURIComponent(managerName)) {
+                history.replaceState(null, '', location.pathname + location.search);
+            }
         } else {
             analysisContent.classList.add('expanded');
             if (leaderboardItem) {
                 leaderboardItem.setAttribute('aria-expanded', 'true');
+            }
+            // Update the shareable deep link without scrolling or adding history entries
+            if (managerName) {
+                history.replaceState(null, '', '#manager/' + encodeURIComponent(managerName));
+                hashScrollDone = true;
             }
         }
     } catch (error) {
@@ -736,6 +435,19 @@ document.addEventListener('click', function(event) {
         if (analysisId) {
             event.preventDefault();
             event.stopPropagation();
+            window.toggleAnalysis(analysisId);
+        }
+    }
+});
+
+// Keyboard support: Enter/Space toggles a focused leaderboard row
+document.addEventListener('keydown', function(event) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const leaderboardItem = event.target.closest('.leaderboard-item.clickable');
+    if (leaderboardItem) {
+        const analysisId = leaderboardItem.getAttribute('data-analysis-id');
+        if (analysisId) {
+            event.preventDefault();
             window.toggleAnalysis(analysisId);
         }
     }
@@ -766,6 +478,230 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// Detect the scaffold text from managers.json.example so it never renders as a real thesis
+function isPlaceholderAnalysis(text) {
+    return typeof text === 'string' && /^your analysis here/i.test(text.trim());
+}
+
+function prefersReducedMotion() {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+// Competition drama context (rank changes, weekly moves, days in lead) derived
+// from the historical chart series — no extra API calls needed
+let dramaContext = null;
+
+function computeDramaContext(chartData, currentData) {
+    if (!chartData || !Array.isArray(chartData.data) || chartData.data.length === 0 ||
+        !currentData || !Array.isArray(currentData) || currentData.length === 0) {
+        return null;
+    }
+
+    const weekAgoTs = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
+    const ytdNow = {};
+    const nameBySymbol = {};
+    currentData.forEach(stock => {
+        nameBySymbol[stock.symbol] = stock.name;
+        if (stock.changePercent !== null && stock.changePercent !== undefined) {
+            ytdNow[stock.symbol] = stock.changePercent;
+        }
+    });
+
+    // YTD value as of ~1 week ago: last historical point at or before that moment
+    const ytdWeekAgo = {};
+    chartData.data.forEach(stock => {
+        if (!Array.isArray(stock.timestamps) || !Array.isArray(stock.data)) return;
+        let value;
+        for (let i = 0; i < stock.timestamps.length; i++) {
+            if (stock.timestamps[i] <= weekAgoTs) value = stock.data[i];
+            else break;
+        }
+        if (value !== undefined && ytdNow[stock.symbol] !== undefined) {
+            ytdWeekAgo[stock.symbol] = value;
+        }
+    });
+
+    const rankBy = values => Object.keys(values)
+        .sort((a, b) => values[b] - values[a])
+        .reduce((ranks, symbol, index) => { ranks[symbol] = index + 1; return ranks; }, {});
+
+    const ranksNow = rankBy(ytdNow);
+    const ranksWeekAgo = Object.keys(ytdWeekAgo).length >= 2 ? rankBy(ytdWeekAgo) : {};
+
+    // True 1-week return, NOT the difference in YTD percentage points
+    // (for a stock up 200% YTD, those two numbers diverge wildly)
+    const weeklyMove = {};
+    currentData.forEach(stock => {
+        if (typeof stock.change1w === 'number') {
+            weeklyMove[stock.symbol] = stock.change1w;
+        } else if (ytdNow[stock.symbol] !== undefined && ytdWeekAgo[stock.symbol] !== undefined) {
+            // Fallback for cached data without change1w: derive from YTD levels
+            weeklyMove[stock.symbol] = ((100 + ytdNow[stock.symbol]) / (100 + ytdWeekAgo[stock.symbol]) - 1) * 100;
+        }
+    });
+
+    let biggestMover = null;
+    Object.keys(weeklyMove).forEach(symbol => {
+        if (!biggestMover || Math.abs(weeklyMove[symbol]) > Math.abs(biggestMover.move)) {
+            biggestMover = { symbol, name: nameBySymbol[symbol], move: weeklyMove[symbol] };
+        }
+    });
+
+    let biggestComeback = null;
+    Object.keys(ranksNow).forEach(symbol => {
+        const previousRank = ranksWeekAgo[symbol];
+        if (previousRank === undefined) return;
+        const climbed = previousRank - ranksNow[symbol];
+        if (climbed > 0 && (!biggestComeback || climbed > biggestComeback.rankDelta)) {
+            biggestComeback = { symbol, name: nameBySymbol[symbol], rankDelta: climbed };
+        }
+    });
+
+    // Days in lead: bucket each series to its last value per trading day,
+    // then credit that day's leader
+    const dailyValues = {};
+    chartData.data.forEach(stock => {
+        if (!Array.isArray(stock.timestamps) || !Array.isArray(stock.data)) return;
+        stock.timestamps.forEach((ts, i) => {
+            const dayKey = new Date(ts).toISOString().split('T')[0];
+            if (!dailyValues[dayKey]) dailyValues[dayKey] = {};
+            dailyValues[dayKey][stock.symbol] = stock.data[i];
+        });
+    });
+    const daysInLead = {};
+    Object.values(dailyValues).forEach(values => {
+        const symbols = Object.keys(values);
+        if (symbols.length < 2) return;
+        const dayLeader = symbols.reduce((best, s) => values[s] > values[best] ? s : best, symbols[0]);
+        daysInLead[dayLeader] = (daysInLead[dayLeader] || 0) + 1;
+    });
+
+    return { ranksNow, ranksWeekAgo, weeklyMove, daysInLead, biggestMover, biggestComeback, nameBySymbol };
+}
+
+function updateDramaContext(chartData, currentData) {
+    dramaContext = computeDramaContext(chartData, currentData);
+    renderWeeklyRecap(dramaContext, currentData);
+}
+
+// Weekly recap shown under the header: always three short insights
+function renderWeeklyRecap(context, currentData) {
+    const recap = document.getElementById('weeklyRecap');
+    if (!recap) return;
+
+    if (!context || !currentData || !Array.isArray(currentData)) {
+        recap.hidden = true;
+        return;
+    }
+
+    const insights = [];
+    const sorted = [...currentData]
+        .filter(s => s.changePercent !== null && s.changePercent !== undefined)
+        .sort((a, b) => b.changePercent - a.changePercent);
+
+    // 1. Biggest mover of the week
+    if (context.biggestMover) {
+        const mover = context.biggestMover;
+        const verb = mover.move >= 0 ? 'gained' : 'dropped';
+        insights.push(`${mover.symbol} (${mover.name}) ${verb} ${Math.abs(mover.move).toFixed(1)}% this week`);
+    }
+
+    // 2. Top-3 takeover, falling back to the biggest comeback anywhere in the field
+    let rankInsight = null;
+    for (let rank = 1; rank <= Math.min(3, sorted.length); rank++) {
+        const stock = sorted[rank - 1];
+        const previousRank = context.ranksWeekAgo[stock.symbol];
+        if (previousRank !== undefined && previousRank > rank) {
+            const displaced = Object.keys(context.ranksWeekAgo)
+                .find(s => context.ranksWeekAgo[s] === rank && context.ranksNow[s] > rank);
+            const displacedName = displaced ? context.nameBySymbol[displaced] : null;
+            rankInsight = displacedName
+                ? `${stock.name} takes #${rank} from ${displacedName}`
+                : `${stock.name} climbs to #${rank}`;
+            break;
+        }
+    }
+    if (!rankInsight && context.biggestComeback) {
+        const comeback = context.biggestComeback;
+        const newRank = context.ranksNow[comeback.symbol];
+        rankInsight = `${comeback.name} climbed ${comeback.rankDelta} spot${comeback.rankDelta === 1 ? '' : 's'} to #${newRank}`;
+    }
+    if (rankInsight) insights.push(rankInsight);
+
+    // 3. Leader's grip on first place
+    if (sorted.length > 0) {
+        const leader = sorted[0];
+        const leadDays = context.daysInLead ? context.daysInLead[leader.symbol] : null;
+        const totalDays = context.daysInLead
+            ? Object.values(context.daysInLead).reduce((a, b) => a + b, 0)
+            : 0;
+        if (leadDays && totalDays > 0) {
+            insights.push(`${leader.name} (${leader.symbol}) has led ${leadDays} of ${totalDays} trading days`);
+        } else {
+            insights.push(`${leader.name} (${leader.symbol}) just took the overall lead`);
+        }
+    }
+
+    // 4. Fallback: tightest battle between adjacent ranks
+    if (insights.length < 3 && sorted.length >= 2) {
+        let tightest = null;
+        for (let i = 1; i < sorted.length; i++) {
+            const gap = sorted[i - 1].changePercent - sorted[i].changePercent;
+            if (!tightest || gap < tightest.gap) {
+                tightest = { gap, upper: i, lower: i + 1 };
+            }
+        }
+        if (tightest) {
+            insights.push(`Just ${tightest.gap.toFixed(1)} pts separate #${tightest.upper} and #${tightest.lower}`);
+        }
+    }
+
+    if (insights.length === 0) {
+        recap.hidden = true;
+        return;
+    }
+
+    const items = insights.slice(0, 3)
+        .map(text => `<span class="weekly-recap-item">${escapeHtml(text)}.</span>`)
+        .join('');
+    recap.innerHTML = `<span class="weekly-recap-label">This Week</span><span class="weekly-recap-text">${items}</span>`;
+    recap.hidden = false;
+}
+
+// Deep links: #manager/Name expands and scrolls to that manager's row
+let hashScrollDone = false;
+
+function applyHashRoute(allowScroll) {
+    const match = location.hash.match(/^#manager\/(.+)$/);
+    if (!match) return false;
+
+    let name;
+    try {
+        name = decodeURIComponent(match[1]);
+    } catch (e) {
+        return false;
+    }
+
+    const row = Array.from(document.querySelectorAll('.leaderboard-item[data-manager-name]'))
+        .find(el => el.getAttribute('data-manager-name').toLowerCase() === name.toLowerCase());
+    if (!row) return false;
+
+    const analysisId = row.getAttribute('data-analysis-id');
+    const analysisContent = analysisId ? document.getElementById(analysisId) : null;
+    if (analysisContent && !analysisContent.classList.contains('expanded')) {
+        analysisContent.classList.add('expanded');
+        row.setAttribute('aria-expanded', 'true');
+    }
+
+    if (allowScroll) {
+        row.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'center' });
+    }
+    return true;
+}
+
+window.addEventListener('hashchange', () => applyHashRoute(true));
+
 // Load and render performance chart
 async function loadChart() {
     try {
@@ -782,8 +718,10 @@ async function loadChart() {
             console.log('Using cached chart data');
             window.lastChartData = cachedChartData;
             window.lastLeaderboardData = cachedCurrentData;
+            updateDramaContext(cachedChartData, cachedCurrentData);
             renderChart(cachedChartData, cachedCurrentData);
             renderZoomedChart(cachedChartData, cachedCurrentData);
+            renderBumpChart(cachedChartData, cachedCurrentData);
             renderLeaderboard(cachedCurrentData);
             renderStats(cachedChartData, cachedCurrentData);
 
@@ -804,8 +742,10 @@ async function loadChart() {
             console.log('Using expired cached data due to error');
             window.lastChartData = cachedChartData;
             window.lastLeaderboardData = cachedCurrentData;
+            updateDramaContext(cachedChartData, cachedCurrentData);
             renderChart(cachedChartData, cachedCurrentData);
             renderZoomedChart(cachedChartData, cachedCurrentData);
+            renderBumpChart(cachedChartData, cachedCurrentData);
             renderLeaderboard(cachedCurrentData);
             renderStats(cachedChartData, cachedCurrentData);
         }
@@ -857,8 +797,10 @@ async function fetchChartData() {
     window.lastLeaderboardData = currentData;
 
     // Render the charts
+    updateDramaContext(chartData, currentData);
     renderChart(chartData, currentData);
     renderZoomedChart(chartData, currentData);
+    renderBumpChart(chartData, currentData);
     renderLeaderboard(currentData);
     renderStats(chartData, currentData);
 }
@@ -878,13 +820,14 @@ async function fetchChartInBackground() {
                 
                 // Update leaderboard display with fresh data
                 managerAnalyses = extractAnalysesFromLeaderboardData(currentData);
-                renderLeaderboard(currentData);
-                
+
                 // Re-render charts with fresh data
                 window.lastChartData = chartData;
                 window.lastLeaderboardData = currentData;
+                updateDramaContext(chartData, currentData);
                 renderChart(chartData, currentData);
                 renderZoomedChart(chartData, currentData);
+                renderBumpChart(chartData, currentData);
                 renderLeaderboard(currentData);
                 renderStats(chartData, currentData);
                 
@@ -1551,11 +1494,28 @@ function renderChart(chartData, currentData) {
                         grid: {
                             display: false
                         },
+                        // Place ticks on evenly spaced trading-day indices ourselves;
+                        // Chart.js's auto ticks land on values with no date label
+                        afterBuildTicks: (axis) => {
+                            // Hard cap including the final-day tick appended below
+                            const desiredTicks = isMobile ? 6 : 9;
+                            const step = Math.max(1, Math.ceil(maxIndex / (desiredTicks - 1)));
+                            const values = [];
+                            for (let v = 0; v <= maxIndex; v += step) values.push(v);
+                            const last = values[values.length - 1];
+                            if (last !== maxIndex) {
+                                // Keep the final (most recent) day labelled without crowding
+                                if (maxIndex - last < step / 2 && values.length > 1) {
+                                    values[values.length - 1] = maxIndex;
+                                } else {
+                                    values.push(maxIndex);
+                                }
+                            }
+                            axis.ticks = values.map(v => ({ value: v }));
+                        },
                         ticks: {
                             display: true,
-                            maxTicksLimit: isMobile ? 6 : 8,
-                            autoSkip: true,
-                            autoSkipPadding: isMobile ? 15 : 20,
+                            autoSkip: false,
                             color: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.4)' : '#aaaaaa',
                             font: {
                                 size: isMobile ? 9 : 11,
@@ -1721,8 +1681,6 @@ function renderChart(chartData, currentData) {
         });
 }
 
-// Zoomed chart showing the middle pack (-35% to +20%)
-let zoomedChart = null;
 
 function formatSignedPercentValue(value, decimals = 1) {
     if (value === null || value === undefined || Number.isNaN(Number(value))) return '-';
@@ -1753,12 +1711,6 @@ function renderPackSummary(stocksInRange, ytdMap, zoomMin, zoomMax) {
     `;
 }
 
-function calculateMedian(values) {
-    if (!values || values.length === 0) return null;
-    const sorted = [...values].sort((a, b) => a - b);
-    const middle = Math.floor(sorted.length / 2);
-    return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
-}
 
 function getRecentSeries(stock, ytdMap) {
     const data = Array.isArray(stock.data) ? [...stock.data] : [];
@@ -1794,7 +1746,6 @@ function renderPackRace(stocksInRange, ytdMap, currentData, chartData, colors) {
     const sortedPack = [...stocksInRange].sort((a, b) => (ytdMap[b.symbol] || 0) - (ytdMap[a.symbol] || 0));
     const packLeadYtd = ytdMap[sortedPack[0].symbol] || 0;
     const packYtdValues = sortedPack.map(stock => ytdMap[stock.symbol]).filter(value => value !== undefined);
-    const packMedian = calculateMedian(packYtdValues);
     const packMin = Math.min(...packYtdValues);
     const packMax = Math.max(...packYtdValues);
     const packRange = Math.max(packMax - packMin, 1);
@@ -1835,11 +1786,7 @@ function renderPackRace(stocksInRange, ytdMap, currentData, chartData, colors) {
         <div class="pack-ladder">
             <div class="pack-ladder-header">
                 <span class="pack-ladder-heading-label">Manager</span>
-                <div class="pack-ladder-scale">
-                    <span>${formatSignedPercentValue(packMin)}</span>
-                    <span>Median ${packMedian === null ? '-' : formatSignedPercentValue(packMedian)}</span>
-                    <span>${formatSignedPercentValue(packMax)}</span>
-                </div>
+                <span></span>
                 <div class="pack-ladder-value-headings">
                     <span>YTD</span>
                     <span>vs Lead</span>
@@ -1853,16 +1800,231 @@ function renderPackRace(stocksInRange, ytdMap, currentData, chartData, colors) {
     `;
 }
 
-function renderZoomedChart(chartData, currentData) {
-    if (!chartData || !chartData.data || chartData.data.length === 0) return;
+// Rank bump chart: y-axis is rank (1 = leader), one line per manager.
+// Normalizes away the outliers so every overtake is equally visible.
+let bumpChart = null;
 
-    if (zoomedChart) {
-        zoomedChart.destroy();
-        zoomedChart = null;
+function renderBumpChart(chartData, currentData) {
+    const ctx = document.getElementById('bumpChart');
+    if (!ctx || typeof Chart === 'undefined') return;
+    if (!chartData || !Array.isArray(chartData.data) || chartData.data.length === 0) return;
+
+    if (bumpChart) {
+        bumpChart.destroy();
+        bumpChart = null;
     }
 
     const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
     const isMobile = window.innerWidth < 768;
+
+    // Same palette and per-manager overrides as the main chart so colors match
+    const lightColors = [
+        '#2563eb', '#059669', '#dc2626', '#d97706', '#7c3aed',
+        '#db2777', '#0d9488', '#ea580c', '#16a34a', '#9333ea',
+        '#0284c7', '#ca8a04'
+    ];
+    const darkColors = [
+        '#60a5fa', '#34d399', '#f472b6', '#fbbf24', '#a78bfa',
+        '#fb7185', '#2dd4bf', '#fb923c', '#84cc16', '#c084fc',
+        '#38bdf8', '#facc15'
+    ];
+    const colors = currentTheme === 'dark' ? darkColors : lightColors;
+    const managerColors = {
+        'Greg': currentTheme === 'dark' ? '#a16207' : '#92400e'
+    };
+
+    // Bucket each series to its last value per calendar day
+    const dayMap = new Map(); // dayKey -> { symbol: ytd }
+    chartData.data.forEach(stock => {
+        if (!Array.isArray(stock.timestamps) || !Array.isArray(stock.data)) return;
+        stock.timestamps.forEach((ts, i) => {
+            const dayKey = new Date(ts).toISOString().split('T')[0];
+            if (!dayMap.has(dayKey)) dayMap.set(dayKey, {});
+            dayMap.get(dayKey)[stock.symbol] = stock.data[i];
+        });
+    });
+    const dayKeys = [...dayMap.keys()].sort();
+    if (dayKeys.length === 0) return;
+
+    // Rank everyone per day, carrying forward the last known value so a
+    // stock with a missing day keeps a continuous line
+    const lastValue = {};
+    const ranksByDay = dayKeys.map(dayKey => {
+        const values = dayMap.get(dayKey);
+        Object.keys(values).forEach(symbol => { lastValue[symbol] = values[symbol]; });
+        const ranked = Object.keys(lastValue).sort((a, b) => lastValue[b] - lastValue[a]);
+        const ranks = {};
+        ranked.forEach((symbol, i) => { ranks[symbol] = i + 1; });
+        return ranks;
+    });
+
+    // Final day mirrors the leaderboard order (dividend-inclusive) when available
+    if (currentData && Array.isArray(currentData)) {
+        const sorted = currentData
+            .filter(s => s.changePercent !== null && s.changePercent !== undefined)
+            .sort((a, b) => b.changePercent - a.changePercent);
+        const lastRanks = ranksByDay[ranksByDay.length - 1];
+        if (sorted.length === Object.keys(lastRanks).length) {
+            const finalRanks = {};
+            sorted.forEach((s, i) => { finalRanks[s.symbol] = i + 1; });
+            ranksByDay[ranksByDay.length - 1] = finalRanks;
+        }
+    }
+
+    // On mobile, sample one rank snapshot per week (plus today) — daily rank
+    // jitter turns the small screen into spaghetti while the real overtakes
+    // survive sampling just fine
+    const sampleStep = isMobile ? 5 : 1;
+    const plotDayIndices = [];
+    for (let i = 0; i < dayKeys.length; i += sampleStep) plotDayIndices.push(i);
+    if (plotDayIndices[plotDayIndices.length - 1] !== dayKeys.length - 1) {
+        plotDayIndices.push(dayKeys.length - 1);
+    }
+
+    const maxIdx = plotDayIndices.length - 1;
+    const managerCount = Object.keys(ranksByDay[ranksByDay.length - 1]).length;
+
+    const indexToDateLabel = new Map();
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    plotDayIndices.forEach((dayIdx, idx) => {
+        const date = new Date(dayKeys[dayIdx] + 'T12:00:00');
+        indexToDateLabel.set(idx, `${monthNames[date.getMonth()]} ${date.getDate()}`);
+    });
+
+    const datasets = chartData.data.map((stock, index) => {
+        const color = managerColors[stock.name] || colors[index % colors.length];
+        const data = [];
+        plotDayIndices.forEach((dayIdx, plotIdx) => {
+            const ranks = ranksByDay[dayIdx];
+            if (ranks[stock.symbol] !== undefined) {
+                data.push({ x: plotIdx, y: ranks[stock.symbol] });
+            }
+        });
+        return {
+            label: `${stock.name} ${stock.symbol}`,
+            data: data,
+            borderColor: color,
+            backgroundColor: color,
+            borderWidth: isMobile ? 1.5 : 2,
+            pointRadius: 0,
+            cubicInterpolationMode: 'monotone',
+            fill: false
+        };
+    }).filter(d => d.data.length > 0);
+
+    if (datasets.length === 0) return;
+
+    bumpChart = new Chart(ctx, {
+        type: 'line',
+        data: { datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { enabled: false }
+            },
+            interaction: { intersect: false, mode: 'nearest' },
+            layout: {
+                padding: {
+                    right: isMobile ? 64 : 130,
+                    left: 0,
+                    top: 4,
+                    bottom: 4
+                }
+            },
+            scales: {
+                y: {
+                    reverse: true,
+                    min: 0.5,
+                    max: managerCount + 0.5,
+                    afterBuildTicks: (axis) => {
+                        const values = [];
+                        for (let r = 1; r <= managerCount; r++) values.push(r);
+                        axis.ticks = values.map(v => ({ value: v }));
+                    },
+                    ticks: {
+                        callback: value => '#' + value,
+                        color: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.4)' : '#aaaaaa',
+                        font: { size: isMobile ? 8 : 10, weight: '400' },
+                        padding: isMobile ? 2 : 6
+                    },
+                    grid: {
+                        color: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)',
+                        lineWidth: 1,
+                        drawBorder: false
+                    }
+                },
+                x: {
+                    type: 'linear',
+                    min: -0.5,
+                    max: maxIdx + 0.5,
+                    position: 'bottom',
+                    grid: { display: false },
+                    afterBuildTicks: (axis) => {
+                        const desiredTicks = isMobile ? 6 : 9;
+                        const step = Math.max(1, Math.ceil(maxIdx / (desiredTicks - 1)));
+                        const values = [];
+                        for (let v = 0; v <= maxIdx; v += step) values.push(v);
+                        const last = values[values.length - 1];
+                        if (last !== maxIdx) {
+                            if (maxIdx - last < step / 2 && values.length > 1) {
+                                values[values.length - 1] = maxIdx;
+                            } else {
+                                values.push(maxIdx);
+                            }
+                        }
+                        axis.ticks = values.map(v => ({ value: v }));
+                    },
+                    ticks: {
+                        autoSkip: false,
+                        color: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.4)' : '#aaaaaa',
+                        font: { size: isMobile ? 9 : 11, weight: '400' },
+                        maxRotation: 0,
+                        minRotation: 0,
+                        padding: isMobile ? 6 : 10,
+                        callback: function(value) {
+                            return indexToDateLabel.get(Math.round(value)) || '';
+                        }
+                    }
+                }
+            },
+            elements: {
+                point: { hoverRadius: 0, hoverBorderWidth: 0 }
+            }
+        },
+        plugins: [{
+            id: 'bumpEndLabels',
+            afterDatasetsDraw: (chart) => {
+                const chartCtx = chart.ctx;
+                if (!chart.chartArea) return;
+                const mobile = window.innerWidth < 768;
+                chartCtx.save();
+                chartCtx.font = mobile
+                    ? '500 7.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+                    : '500 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                chartCtx.textBaseline = 'middle';
+                chartCtx.textAlign = 'left';
+
+                chart.data.datasets.forEach((dataset, i) => {
+                    const meta = chart.getDatasetMeta(i);
+                    if (!meta || meta.hidden || !meta.data || meta.data.length === 0) return;
+                    const lastPoint = meta.data[meta.data.length - 1];
+                    if (!lastPoint) return;
+                    chartCtx.fillStyle = dataset.borderColor;
+                    chartCtx.fillText(dataset.label, lastPoint.x + (mobile ? 4 : 8), lastPoint.y);
+                });
+
+                chartCtx.restore();
+            }
+        }]
+    });
+}
+
+function renderZoomedChart(chartData, currentData) {
+    if (!chartData || !chartData.data || chartData.data.length === 0) return;
+
+    const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
 
     const ytdMap = {};
     if (currentData && Array.isArray(currentData)) {
@@ -1892,260 +2054,6 @@ function renderZoomedChart(chartData, currentData) {
 
     renderPackSummary(stocksInRange, ytdMap, ZOOM_MIN, ZOOM_MAX);
     renderPackRace(stocksInRange, ytdMap, currentData, chartData, colors);
-    return;
-
-    if (stocksInRange.length === 0) {
-        const parent = ctx.parentElement;
-        if (parent) {
-            parent.classList.add('is-empty');
-            parent.setAttribute('data-empty-message', 'No managers are currently inside the middle-pack range.');
-        }
-        return;
-    }
-
-    if (ctx.parentElement) {
-        ctx.parentElement.classList.remove('is-empty');
-        ctx.parentElement.removeAttribute('data-empty-message');
-    }
-
-    // Build timestamp index (same approach as main chart)
-    const allTimestamps = [];
-    const today = new Date();
-    const todayTimestamp = today.getTime();
-    const firstTradingDay = new Date(2026, 0, 2);
-
-    stocksInRange.forEach(stock => {
-        (stock.timestamps || []).forEach(ts => {
-            if (ts >= firstTradingDay.getTime() && ts <= todayTimestamp && !allTimestamps.includes(ts)) {
-                allTimestamps.push(ts);
-            }
-        });
-    });
-    allTimestamps.sort((a, b) => a - b);
-
-    const tsToIndex = new Map();
-    const indexToLabel = new Map();
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    allTimestamps.forEach((ts, idx) => {
-        tsToIndex.set(ts, idx);
-        const d = new Date(ts);
-        indexToLabel.set(idx, `${monthNames[d.getMonth()]} ${d.getDate()}`);
-    });
-
-    // Find original index in chartData.data for color matching
-    const originalIndices = stocksInRange.map(stock =>
-        chartData.data.findIndex(s => s.symbol === stock.symbol)
-    );
-
-    const datasets = stocksInRange.map((stock, i) => {
-        const origIdx = originalIndices[i];
-        const color = colors[origIdx % colors.length];
-        const data = stock.data || [];
-        const timestamps = stock.timestamps || [];
-
-        const timeData = data.map((value, idx) => {
-            const ts = timestamps[idx];
-            if (!ts || ts < firstTradingDay.getTime() || ts > todayTimestamp) return null;
-            const xIdx = tsToIndex.get(ts);
-            if (xIdx === undefined) return null;
-            return { x: xIdx, y: value };
-        }).filter(p => p !== null);
-
-        // Override last point with current YTD
-        const ytd = ytdMap[stock.symbol];
-        if (timeData.length > 0 && ytd !== undefined) {
-            timeData[timeData.length - 1].y = ytd;
-        }
-
-        return {
-            label: `${stock.name} (${stock.symbol})`,
-            data: timeData,
-            borderColor: color,
-            backgroundColor: color,
-            borderWidth: isMobile ? 1.25 : 1.75,
-            fill: false,
-            tension: 0.1,
-            pointRadius: 0,
-            pointHoverRadius: isMobile ? 3 : 4,
-            pointHitRadius: 12,
-            pointHoverBackgroundColor: color,
-            pointHoverBorderColor: currentTheme === 'dark' ? '#0f0f0f' : '#ffffff',
-            pointHoverBorderWidth: 2
-        };
-    });
-
-    const validDatasets = datasets.filter(d => d.data.length > 0);
-    if (validDatasets.length === 0) return;
-
-    let maxIndex = 0;
-    validDatasets.forEach(ds => {
-        ds.data.forEach(p => { if (p.x > maxIndex) maxIndex = p.x; });
-    });
-
-    zoomedChart = new Chart(ctx, {
-        type: 'line',
-        data: { datasets: validDatasets },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    enabled: true,
-                    displayColors: true,
-                    callbacks: {
-                        title: function(items) {
-                            if (!items || items.length === 0) return '';
-                            return indexToLabel.get(Math.round(items[0].parsed.x)) || 'Latest';
-                        },
-                        label: function(context) {
-                            return `${context.dataset.label}: ${formatSignedPercentValue(context.parsed.y)}`;
-                        }
-                    }
-                }
-            },
-            interaction: { intersect: false, mode: 'nearest' },
-            scales: {
-                y: {
-                    min: ZOOM_MIN,
-                    max: ZOOM_MAX,
-                    title: { display: false },
-                    ticks: {
-                        callback: function(value) {
-                            return (value > 0 ? '+' : '') + value + '%';
-                        },
-                        color: currentTheme === 'dark' ? 'rgba(255,255,255,0.4)' : '#aaaaaa',
-                        font: { size: isMobile ? 9 : 11, weight: '400' },
-                        padding: isMobile ? 6 : 10
-                    },
-                    grid: {
-                        color: (ctx) => {
-                            if (ctx.tick.value === 0) return currentTheme === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)';
-                            return currentTheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
-                        },
-                        lineWidth: (ctx) => ctx.tick.value === 0 ? 1.5 : 1,
-                        drawBorder: false
-                    }
-                },
-                x: {
-                    type: 'linear',
-                    min: -0.5,
-                    max: maxIndex + 0.5,
-                    display: true,
-                    grid: { display: false },
-                    ticks: {
-                        display: true,
-                        maxTicksLimit: isMobile ? 6 : 8,
-                        autoSkip: true,
-                        color: currentTheme === 'dark' ? 'rgba(255,255,255,0.4)' : '#aaaaaa',
-                        font: { size: isMobile ? 9 : 11, weight: '400' },
-                        maxRotation: 0,
-                        padding: isMobile ? 6 : 10,
-                        callback: function(value) {
-                            return indexToLabel.get(Math.round(value)) || '';
-                        }
-                    }
-                }
-            },
-            layout: {
-                padding: { right: isMobile ? 54 : 96, left: isMobile ? 0 : 8, top: 8, bottom: 4 }
-            }
-        },
-        plugins: [{
-            id: 'zoomedLabels',
-            afterDatasetsDraw: (chart) => {
-                const chartCtx = chart.ctx;
-                const chartArea = chart.chartArea;
-                if (!chartArea) return;
-
-                const fontSize = isMobile
-                    ? '500 7px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-                    : '500 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-                const lineHeight = isMobile ? 10 : 14;
-                const padding = isMobile ? 2 : 3;
-                const labelTheme = document.documentElement.getAttribute('data-theme') || 'light';
-
-                chartCtx.font = fontSize;
-                chartCtx.textBaseline = 'middle';
-
-                const labelData = [];
-                chart.data.datasets.forEach((dataset, i) => {
-                    const meta = chart.getDatasetMeta(i);
-                    if (!meta || meta.hidden || !meta.data || meta.data.length === 0) return;
-                    const lastPoint = meta.data[meta.data.length - 1];
-                    if (!lastPoint) return;
-
-                    const labelParts = dataset.label.split(' (');
-                    const name = labelParts[0];
-                    const symbol = labelParts[1] ? labelParts[1].replace(')', '') : '';
-                    const ytd = ytdMap[symbol];
-                    const ytdStr = ytd !== undefined ? `${ytd >= 0 ? '+' : ''}${ytd.toFixed(1)}%` : '';
-                    const text = isMobile ? `${symbol} ${ytdStr}` : `${name} ${symbol} ${ytdStr}`;
-                    const textWidth = chartCtx.measureText(text).width;
-
-                    labelData.push({ y: lastPoint.y, text, textWidth, color: dataset.borderColor });
-                });
-
-                if (labelData.length === 0) return;
-
-                // Cluster collision resolution
-                const minSpacing = lineHeight + (isMobile ? 1 : 2);
-                const topBound = chartArea.top + lineHeight / 2 + 2;
-                const bottomBound = chartArea.bottom - lineHeight / 2 - 2;
-
-                labelData.sort((a, b) => a.y - b.y);
-
-                const clusters = [];
-                let cluster = [labelData[0]];
-                for (let i = 1; i < labelData.length; i++) {
-                    if (labelData[i].y - cluster[cluster.length - 1].y < minSpacing) {
-                        cluster.push(labelData[i]);
-                    } else {
-                        clusters.push(cluster);
-                        cluster = [labelData[i]];
-                    }
-                }
-                clusters.push(cluster);
-
-                clusters.forEach(group => {
-                    if (group.length === 1) return;
-                    const center = group.reduce((s, l) => s + l.y, 0) / group.length;
-                    const totalH = (group.length - 1) * minSpacing;
-                    let start = center - totalH / 2;
-                    if (start < topBound) start = topBound;
-                    if (start + totalH > bottomBound) start = bottomBound - totalH;
-                    group.forEach((l, i) => { l.y = start + i * minSpacing; });
-                });
-
-                labelData.forEach(l => { l.y = Math.max(topBound, Math.min(bottomBound, l.y)); });
-
-                const rightEdge = chartArea.right - 4;
-                labelData.forEach(label => {
-                    const rectWidth = label.textWidth + padding * 2;
-                    const rectX = rightEdge - rectWidth;
-
-                    chartCtx.save();
-                    chartCtx.font = fontSize;
-                    chartCtx.textAlign = 'left';
-                    chartCtx.textBaseline = 'middle';
-
-                    chartCtx.fillStyle = labelTheme === 'dark' ? 'rgba(15,15,15,0.85)' : 'rgba(255,255,255,0.88)';
-                    chartCtx.beginPath();
-                    chartCtx.roundRect(rectX, label.y - lineHeight / 2, rectWidth, lineHeight, isMobile ? 3 : 4);
-                    chartCtx.fill();
-
-                    chartCtx.fillStyle = label.color;
-                    chartCtx.beginPath();
-                    chartCtx.roundRect(rectX, label.y - lineHeight / 2, isMobile ? 2 : 3, lineHeight, [isMobile ? 3 : 4, 0, 0, isMobile ? 3 : 4]);
-                    chartCtx.fill();
-
-                    chartCtx.fillStyle = labelTheme === 'dark' ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.8)';
-                    chartCtx.fillText(label.text, rectX + padding + (isMobile ? 3 : 4), label.y);
-                    chartCtx.restore();
-                });
-            }
-        }]
-    });
 }
 
 // Render statistics section
@@ -2255,12 +2163,39 @@ function renderStats(chartData, currentData) {
         ? `<span class="distribution-zero" style="left: ${getDistributionPosition(0).toFixed(2)}%;" aria-hidden="true"></span>`
         : '';
 
+    const leaderDays = dramaContext && dramaContext.daysInLead
+        ? dramaContext.daysInLead[leader.symbol]
+        : null;
+
+    let dramaCardsHtml = '';
+    if (dramaContext && dramaContext.biggestMover) {
+        const mover = dramaContext.biggestMover;
+        dramaCardsHtml += `
+            <div class="summary-card">
+                <span class="summary-label">Biggest mover (7d)</span>
+                <strong>${escapeHtml(mover.name || mover.symbol)}</strong>
+                <span class="summary-value ${mover.move >= 0 ? 'positive' : 'negative'}">${formatSignedPercentValue(mover.move)} this week</span>
+            </div>
+        `;
+    }
+    if (dramaContext && dramaContext.biggestComeback) {
+        const comeback = dramaContext.biggestComeback;
+        dramaCardsHtml += `
+            <div class="summary-card">
+                <span class="summary-label">Biggest comeback (7d)</span>
+                <strong>${escapeHtml(comeback.name || comeback.symbol)}</strong>
+                <span class="summary-note">&#9650;${comeback.rankDelta} place${comeback.rankDelta === 1 ? '' : 's'} this week</span>
+            </div>
+        `;
+    }
+
     const summaryHtml = `
         <div class="stats-summary">
             <div class="summary-card featured">
                 <span class="summary-label">Field leader</span>
                 <strong>${escapeHtml(leader.name)}</strong>
                 <span class="summary-value positive">${formatSignedPercentValue(leader.changePercent)}</span>
+                ${leaderDays ? `<span class="summary-note">${leaderDays} trading day${leaderDays === 1 ? '' : 's'} in the lead</span>` : ''}
             </div>
             <div class="summary-card">
                 <span class="summary-label">Average return</span>
@@ -2287,6 +2222,7 @@ function renderStats(chartData, currentData) {
                 <strong>${stdDev.toFixed(1)} pct pts</strong>
                 <span class="summary-note">Standard deviation</span>
             </div>
+            ${dramaCardsHtml}
         </div>
     `;
 

@@ -44,11 +44,21 @@
             </div>
         </header>
 
+        <p id="weeklyRecap" class="weekly-recap" hidden></p>
+
         <div class="main-content">
             <!-- Performance Chart -->
             <section class="chart-section">
                 <div class="chart-container">
                     <canvas id="performanceChart"></canvas>
+                </div>
+            </section>
+
+            <!-- Rank Race (bump chart) -->
+            <section class="chart-section chart-section-bump">
+                <h2>Rank Race</h2>
+                <div class="chart-container chart-container-bump">
+                    <canvas id="bumpChart"></canvas>
                 </div>
             </section>
 
@@ -58,8 +68,8 @@
                     <div>
                         <h2>The Pack</h2>
                         <p class="section-description">A closer look at managers clustered around the middle of the field.</p>
+                        <div id="packSummary" class="pack-summary" aria-live="polite"></div>
                     </div>
-                    <div id="packSummary" class="pack-summary" aria-live="polite"></div>
                 </div>
                 <div id="packRace" class="pack-race" aria-live="polite">
                     <div class="loading">Loading pack data...</div>
@@ -79,7 +89,6 @@
                 <div class="section-heading">
                     <div>
                         <h2>Statistics</h2>
-                        <p class="section-description">Quick context for standings, benchmark performance, and consistency.</p>
                     </div>
                 </div>
                 <div id="statsGrid" class="stats-board">
