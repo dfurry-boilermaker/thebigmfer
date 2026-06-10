@@ -342,20 +342,31 @@ section h2 {
 
 .pack-ladder {
     border: 1px solid var(--border-color);
-    background: var(--border-color);
+    background: var(--bg-secondary);
+}
+
+.pack-ladder-header {
+    display: grid;
+    grid-template-columns: minmax(180px, 0.72fr) minmax(320px, 1.25fr) minmax(210px, 0.72fr);
+    align-items: center;
+    gap: 18px;
+    padding: 9px 14px;
+    background: var(--bg-primary);
+    color: var(--text-tertiary);
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.pack-ladder-heading-label {
+    text-align: left;
 }
 
 .pack-ladder-scale {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 8px;
-    padding: 7px 10px;
-    background: var(--bg-secondary);
-    color: var(--text-tertiary);
-    font-size: 0.625rem;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
 }
 
 .pack-ladder-scale span:nth-child(2) {
@@ -366,20 +377,28 @@ section h2 {
     text-align: right;
 }
 
+.pack-ladder-value-headings {
+    display: grid;
+    grid-template-columns: 64px minmax(72px, 1fr) 56px;
+    gap: 10px;
+    text-align: right;
+}
+
 .pack-ladder-list {
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 0;
 }
 
 .pack-ladder-row {
     display: grid;
-    grid-template-columns: minmax(150px, 0.9fr) minmax(180px, 1fr) minmax(200px, 0.9fr);
+    grid-template-columns: minmax(180px, 0.72fr) minmax(320px, 1.25fr) minmax(210px, 0.72fr);
     align-items: center;
-    gap: 12px;
-    min-height: 36px;
-    padding: 6px 10px;
+    gap: 18px;
+    min-height: 42px;
+    padding: 8px 14px;
     background: var(--bg-secondary);
+    border-top: 1px solid var(--border-color);
 }
 
 .pack-ladder-row.pack-leader {
@@ -388,16 +407,17 @@ section h2 {
 
 .pack-ladder-identity {
     display: grid;
-    grid-template-columns: 7px 28px minmax(0, 1fr);
+    grid-template-columns: 6px 30px minmax(0, 1fr);
     align-items: center;
-    gap: 7px;
+    gap: 8px;
     min-width: 0;
 }
 
 .pack-ladder-color {
-    width: 7px;
-    height: 22px;
+    width: 6px;
+    height: 26px;
     display: block;
+    border-radius: 999px;
 }
 
 .pack-ladder-rank {
@@ -421,7 +441,7 @@ section h2 {
     white-space: nowrap;
     color: var(--text-primary);
     font-weight: 600;
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
 }
 
 .pack-symbol {
@@ -431,33 +451,41 @@ section h2 {
 
 .pack-ladder-track {
     position: relative;
-    height: 4px;
-    background: var(--bg-primary);
-    border: 1px solid var(--border-light);
+    height: 2px;
+    background: var(--border-color);
+    border: none;
+}
+
+.pack-ladder-track::before {
+    content: "";
+    position: absolute;
+    inset: -9px 0;
+    background: linear-gradient(90deg, transparent 0, transparent calc(50% - 0.5px), var(--border-light) calc(50% - 0.5px), var(--border-light) calc(50% + 0.5px), transparent calc(50% + 0.5px));
+    pointer-events: none;
 }
 
 .pack-ladder-dot {
     position: absolute;
     top: 50%;
-    width: 12px;
-    height: 12px;
+    width: 13px;
+    height: 13px;
     border: 2px solid var(--bg-secondary);
     border-radius: 50%;
     transform: translate(-50%, -50%);
-    box-shadow: 0 0 0 1px var(--border-light);
+    box-shadow: 0 0 0 1px var(--border-color), 0 2px 8px rgba(0, 0, 0, 0.18);
 }
 
 .pack-ladder-values {
     display: grid;
-    grid-template-columns: 58px minmax(64px, 1fr) 52px;
+    grid-template-columns: 64px minmax(72px, 1fr) 56px;
     align-items: baseline;
-    gap: 8px;
+    gap: 10px;
     text-align: right;
     font-variant-numeric: tabular-nums;
 }
 
 .pack-ladder-ytd {
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     font-weight: 800;
 }
 
@@ -504,14 +532,25 @@ section h2 {
         padding: 5px 8px;
     }
 
+    .pack-ladder-header,
     .pack-ladder-row {
         grid-template-columns: minmax(120px, 0.9fr) minmax(120px, 1fr) minmax(170px, 0.9fr);
         gap: 8px;
+    }
+
+    .pack-ladder-header {
         padding: 6px 8px;
     }
 
-    .pack-ladder-scale {
+    .pack-ladder-row {
+        min-height: 36px;
         padding: 6px 8px;
+    }
+
+    .pack-ladder-value-headings,
+    .pack-ladder-values {
+        grid-template-columns: 54px minmax(62px, 1fr) 48px;
+        gap: 6px;
     }
 }
 
@@ -535,7 +574,7 @@ section h2 {
         font-size: 0.5625rem;
     }
 
-    .pack-ladder-scale {
+    .pack-ladder-header {
         display: none;
     }
 
@@ -1844,58 +1883,61 @@ section h2 {
     }
 
     .leaderboard-item {
-        grid-template-columns: 24px minmax(0, 1fr);
+        grid-template-columns: 22px minmax(102px, 0.75fr) minmax(190px, 1.25fr);
         column-gap: 8px;
-        row-gap: 10px;
-        padding: 12px 10px;
+        row-gap: 0;
+        align-items: center;
+        padding: 18px 10px;
+        min-height: 82px;
     }
 
     .rank {
         font-size: 0.6875rem;
-        width: 22px;
-        height: 22px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        background: var(--bg-secondary);
-        border: 1px solid var(--border-color);
+        width: auto;
+        height: auto;
+        display: block;
+        background: transparent;
+        border: none;
     }
 
     .manager-info {
         display: flex;
         flex-direction: row;
         align-items: center;
-        gap: 5px;
+        gap: 7px;
         flex-wrap: nowrap;
         white-space: nowrap;
         min-width: 0;
     }
 
     .manager-name {
-        font-size: 0.6875rem;
+        font-size: 0.875rem;
+        font-weight: 600;
         overflow: hidden;
         text-overflow: ellipsis;
     }
 
     .stock-symbol {
-        font-size: 0.6875rem;
+        font-size: 0.75rem;
     }
 
     .manager-info .current-price {
         display: inline;
-        font-size: 0.6875rem;
+        color: var(--text-primary);
+        font-size: 0.875rem;
+        font-weight: 700;
     }
 
     .price-percent-combined {
-        grid-column: 1 / -1;
-        grid-row: 2;
+        grid-column: 3;
+        grid-row: 1;
         display: grid;
         grid-template-columns: repeat(6, minmax(0, 1fr));
         align-items: stretch;
-        gap: 1px;
+        gap: 7px;
         width: 100%;
-        background: var(--border-color);
-        border: 1px solid var(--border-color);
+        background: transparent;
+        border: none;
     }
 
     .leaderboard-context-metrics {
@@ -1905,17 +1947,18 @@ section h2 {
     .leaderboard-context-metric {
         min-width: 0;
         flex: none;
-        gap: 1px;
-        padding: 7px 2px;
-        background: var(--leaderboard-bg);
+        gap: 5px;
+        padding: 0;
+        background: transparent;
     }
 
     .context-label {
-        font-size: 0.5rem;
+        font-size: 0.5625rem;
+        letter-spacing: 0.06em;
     }
 
     .context-value {
-        font-size: 0.625rem;
+        font-size: 0.75rem;
         white-space: nowrap;
     }
 
@@ -1926,9 +1969,9 @@ section h2 {
     .time-period {
         min-width: 0;
         flex: none;
-        gap: 1px;
-        padding: 7px 2px;
-        background: var(--leaderboard-bg);
+        gap: 5px;
+        padding: 0;
+        background: transparent;
     }
 
     .current-price {
@@ -1937,11 +1980,12 @@ section h2 {
     }
 
     .period-label {
-        font-size: 0.5rem;
+        font-size: 0.5625rem;
+        letter-spacing: 0.06em;
     }
 
     .period-value {
-        font-size: 0.625rem;
+        font-size: 0.75rem;
         white-space: nowrap;
     }
 }

@@ -1833,10 +1833,18 @@ function renderPackRace(stocksInRange, ytdMap, currentData, chartData, colors) {
 
     container.innerHTML = `
         <div class="pack-ladder">
-            <div class="pack-ladder-scale">
-                <span>${formatSignedPercentValue(packMin)}</span>
-                <span>Median ${packMedian === null ? '-' : formatSignedPercentValue(packMedian)}</span>
-                <span>${formatSignedPercentValue(packMax)}</span>
+            <div class="pack-ladder-header">
+                <span class="pack-ladder-heading-label">Manager</span>
+                <div class="pack-ladder-scale">
+                    <span>${formatSignedPercentValue(packMin)}</span>
+                    <span>Median ${packMedian === null ? '-' : formatSignedPercentValue(packMedian)}</span>
+                    <span>${formatSignedPercentValue(packMax)}</span>
+                </div>
+                <div class="pack-ladder-value-headings">
+                    <span>YTD</span>
+                    <span>vs Lead</span>
+                    <span>Recent</span>
+                </div>
             </div>
             <div class="pack-ladder-list">
                 ${rows}
