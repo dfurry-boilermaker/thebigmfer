@@ -661,6 +661,16 @@ function renderLeaderboard(data) {
                         </span>
                     </div>
                 </div>
+                <div class="leaderboard-context-metrics">
+                    <span class="leaderboard-context-metric">
+                        <span class="context-label">vs Avg</span>
+                        <span class="context-value ${vsAvgClass}">${vsAvg !== null ? formatSignedPercentValue(vsAvg) : '-'}</span>
+                    </span>
+                    <span class="leaderboard-context-metric">
+                        <span class="context-label">vs SPY</span>
+                        <span class="context-value ${vsSpyClass}">${vsSpy !== null ? formatSignedPercentValue(vsSpy) : '-'}</span>
+                    </span>
+                </div>
                 <div class="price-percent-combined">
                     <div class="time-periods desktop-only">
                         <span class="time-period">
@@ -678,16 +688,6 @@ function renderLeaderboard(data) {
                         <span class="time-period">
                             <span class="period-label">YTD</span>
                             <span class="period-value ${item.changePercent === null ? 'no-data' : changeYTDClass}">${item.changePercent !== null ? getChangeSign(item.changePercent) + formatPercent(item.changePercent) + '%' : '-'}</span>
-                        </span>
-                    </div>
-                    <div class="leaderboard-context-metrics">
-                        <span class="leaderboard-context-metric">
-                            <span class="context-label">vs Avg</span>
-                            <span class="context-value ${vsAvgClass}">${vsAvg !== null ? formatSignedPercentValue(vsAvg) : '-'}</span>
-                        </span>
-                        <span class="leaderboard-context-metric">
-                            <span class="context-label">vs SPY</span>
-                            <span class="context-value ${vsSpyClass}">${vsSpy !== null ? formatSignedPercentValue(vsSpy) : '-'}</span>
                         </span>
                     </div>
                 </div>
@@ -2262,7 +2262,7 @@ function renderStats(chartData, currentData) {
         <div class="stats-distribution">
             <div class="distribution-header">
                 <div>
-                    <strong>YTD Distribution</strong>
+                    <strong>Distribution</strong>
                     <span>Each dot is positioned by return; z-score shows distance from the field average.</span>
                 </div>
                 <span class="distribution-range">${formatSignedPercentValue(laggard.changePercent)} to ${formatSignedPercentValue(leader.changePercent)}</span>
