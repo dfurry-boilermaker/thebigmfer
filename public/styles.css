@@ -947,7 +947,7 @@ section h2 {
 
 .distribution-plot {
     position: relative;
-    height: 112px;
+    height: 132px;
     border: 1px solid var(--border-color);
     background:
         linear-gradient(90deg, transparent 0, transparent calc(50% - 0.5px), var(--border-color) calc(50% - 0.5px), var(--border-color) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
@@ -1209,7 +1209,7 @@ section h2 {
     }
 
     .distribution-plot {
-        height: 104px;
+        height: 124px;
     }
 
     .stats-grid {
@@ -1237,7 +1237,7 @@ section h2 {
     }
 
     .distribution-plot {
-        height: 92px;
+        height: 112px;
     }
 
     .distribution-marker span {
@@ -1335,7 +1335,7 @@ section h2 {
 
 .leaderboard-item {
     display: grid;
-    grid-template-columns: 50px minmax(180px, 1fr) auto auto;
+    grid-template-columns: 50px minmax(180px, 1fr) auto;
     grid-template-rows: auto auto;
     gap: 20px;
     align-items: center;
@@ -1349,7 +1349,7 @@ section h2 {
     min-height: 60px;
 }
 
-.rank, .manager-info, .leaderboard-context-metrics, .price-percent-combined {
+.rank, .manager-info, .price-percent-combined {
     grid-row: 1;
 }
 
@@ -1384,9 +1384,10 @@ section h2 {
 
 @media (max-width: 480px) {
     .leaderboard-item {
-        grid-template-columns: 20px auto 1fr;
+        grid-template-columns: 20px 1fr;
         grid-template-rows: auto auto auto;
-        gap: 4px;
+        column-gap: 6px;
+        row-gap: 8px;
         padding: 10px 8px;
         min-height: 50px;
     }
@@ -1484,17 +1485,17 @@ section h2 {
 
 .price-percent-combined {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: flex-end;
-    gap: 7px;
+    gap: 18px;
 }
 
 .leaderboard-context-metrics {
     display: flex;
-    justify-content: center;
+    justify-content: flex-end;
     align-items: center;
     gap: 16px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
 }
 
 .leaderboard-context-metric {
@@ -1689,7 +1690,7 @@ section h2 {
     }
 
     .leaderboard-item {
-        grid-template-columns: 35px minmax(130px, 1fr) auto auto;
+        grid-template-columns: 35px minmax(130px, 1fr) auto;
         gap: 12px;
         padding: 14px 16px;
     }
@@ -1814,15 +1815,10 @@ section h2 {
     }
 
     .leaderboard-item {
-        grid-template-columns: 20px auto 1fr;
-        gap: 4px;
+        grid-template-columns: 20px 1fr;
+        column-gap: 6px;
+        row-gap: 8px;
         padding: 10px 8px;
-    }
-
-    .leaderboard-context-metrics {
-        grid-column: 3;
-        grid-row: 1;
-        justify-content: flex-end;
     }
 
     .rank {
@@ -1836,6 +1832,7 @@ section h2 {
         gap: 4px;
         flex-wrap: nowrap;
         white-space: nowrap;
+        min-width: 0;
     }
 
     .manager-name {
@@ -1855,12 +1852,16 @@ section h2 {
         grid-column: 1 / -1;
         grid-row: 2;
         display: flex;
-        align-items: flex-end;
-        gap: 0;
+        align-items: stretch;
+        justify-content: space-between;
+        gap: 8px;
+        width: 100%;
     }
 
     .leaderboard-context-metrics {
         gap: 8px;
+        justify-content: flex-start;
+        flex: 0 0 auto;
     }
 
     .leaderboard-context-metric {
@@ -1880,6 +1881,8 @@ section h2 {
 
     .price-percent-combined .time-periods {
         gap: 8px;
+        flex: 1 1 auto;
+        justify-content: flex-end;
     }
 
     .time-period {

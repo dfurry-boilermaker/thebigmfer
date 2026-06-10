@@ -661,17 +661,17 @@ function renderLeaderboard(data) {
                         </span>
                     </div>
                 </div>
-                <div class="leaderboard-context-metrics">
-                    <span class="leaderboard-context-metric">
-                        <span class="context-label">vs Avg</span>
-                        <span class="context-value ${vsAvgClass}">${vsAvg !== null ? formatSignedPercentValue(vsAvg) : '-'}</span>
-                    </span>
-                    <span class="leaderboard-context-metric">
-                        <span class="context-label">vs SPY</span>
-                        <span class="context-value ${vsSpyClass}">${vsSpy !== null ? formatSignedPercentValue(vsSpy) : '-'}</span>
-                    </span>
-                </div>
                 <div class="price-percent-combined">
+                    <div class="leaderboard-context-metrics">
+                        <span class="leaderboard-context-metric">
+                            <span class="context-label">vs Avg</span>
+                            <span class="context-value ${vsAvgClass}">${vsAvg !== null ? formatSignedPercentValue(vsAvg) : '-'}</span>
+                        </span>
+                        <span class="leaderboard-context-metric">
+                            <span class="context-label">vs SPY</span>
+                            <span class="context-value ${vsSpyClass}">${vsSpy !== null ? formatSignedPercentValue(vsSpy) : '-'}</span>
+                        </span>
+                    </div>
                     <div class="time-periods desktop-only">
                         <span class="time-period">
                             <span class="period-label">1d</span>
@@ -2195,20 +2195,31 @@ function renderStats(chartData, currentData) {
         .join(' ');
     const curveAreaPath = `${curvePath} L 100 84 L 0 84 Z`;
 
+    const labelLanes = [24, 45, 66, 87];
+    const laneRightEdges = labelLanes.map(() => -Infinity);
+    const labelGap = 1.5;
+
     const distributionDots = [...validStocks]
         .sort((a, b) => a.changePercent - b.changePercent)
-        .map((stock, index) => {
+        .map(stock => {
             const x = getDistributionPosition(stock.changePercent);
-            const laneOffset = ((index % 3) - 1) * 7;
-            const y = Math.min(76, Math.max(20, 78 - (getDensity(stock.changePercent) * 42) + laneOffset));
             const directionClass = stock.changePercent >= 0 ? 'positive' : 'negative';
             const zScore = getZScore(stock.changePercent);
             const zScoreClass = Math.abs(zScore) >= 1 ? 'uncommon' : 'common';
             const zScoreText = formatZScore(zScore);
             const label = `${stock.symbol}: ${formatSignedPercentValue(stock.changePercent)} YTD, z-score ${zScoreText}`;
+            const estimatedLabelWidth = Math.max(9, Math.min(16, (stock.symbol.length + zScoreText.length + 3) * 0.85));
+            const halfLabelWidth = estimatedLabelWidth / 2;
+            const labelX = Math.min(100 - halfLabelWidth, Math.max(halfLabelWidth, x));
+            const laneIndex = laneRightEdges.findIndex(rightEdge => labelX - halfLabelWidth > rightEdge + labelGap);
+            const assignedLane = laneIndex === -1
+                ? laneRightEdges.indexOf(Math.min(...laneRightEdges))
+                : laneIndex;
+
+            laneRightEdges[assignedLane] = labelX + halfLabelWidth;
 
             return `
-                <span class="distribution-stock ${directionClass}" style="left: ${x.toFixed(2)}%; top: ${y.toFixed(2)}%;" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">
+                <span class="distribution-stock ${directionClass}" style="left: ${labelX.toFixed(2)}%; top: ${labelLanes[assignedLane].toFixed(2)}%;" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">
                     <span class="distribution-stock-label">
                         <span class="distribution-stock-symbol">${escapeHtml(stock.symbol)}</span>
                         <span class="distribution-stock-z ${zScoreClass}">z ${zScoreText}</span>
