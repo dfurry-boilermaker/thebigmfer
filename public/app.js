@@ -2195,9 +2195,9 @@ function renderStats(chartData, currentData) {
         .join(' ');
     const curveAreaPath = `${curvePath} L 100 84 L 0 84 Z`;
 
-    const labelLanes = [28, 48, 68, 86];
-    const laneRightEdges = labelLanes.map(() => -Infinity);
-    const labelGap = 1.5;
+    const dotLanes = [34, 46, 58, 70];
+    const laneRightEdges = dotLanes.map(() => -Infinity);
+    const dotGap = 1.2;
 
     const distributionDots = [...validStocks]
         .sort((a, b) => a.changePercent - b.changePercent)
@@ -2205,25 +2205,19 @@ function renderStats(chartData, currentData) {
             const x = getDistributionPosition(stock.changePercent);
             const directionClass = stock.changePercent >= 0 ? 'positive' : 'negative';
             const zScore = getZScore(stock.changePercent);
-            const zScoreClass = Math.abs(zScore) >= 1 ? 'uncommon' : 'common';
             const zScoreText = formatZScore(zScore);
             const label = `${stock.symbol}: ${formatSignedPercentValue(stock.changePercent)} YTD, z-score ${zScoreText}`;
-            const estimatedLabelWidth = Math.max(5.5, Math.min(9, stock.symbol.length * 1.45));
-            const halfLabelWidth = estimatedLabelWidth / 2;
-            const labelX = Math.min(100 - halfLabelWidth, Math.max(halfLabelWidth, x));
-            const laneIndex = laneRightEdges.findIndex(rightEdge => labelX - halfLabelWidth > rightEdge + labelGap);
+            const dotHalfWidth = 1.2;
+            const dotX = Math.min(100 - dotHalfWidth, Math.max(dotHalfWidth, x));
+            const laneIndex = laneRightEdges.findIndex(rightEdge => dotX - dotHalfWidth > rightEdge + dotGap);
             const assignedLane = laneIndex === -1
                 ? laneRightEdges.indexOf(Math.min(...laneRightEdges))
                 : laneIndex;
 
-            laneRightEdges[assignedLane] = labelX + halfLabelWidth;
+            laneRightEdges[assignedLane] = dotX + dotHalfWidth;
 
             return `
-                <span class="distribution-stock ${directionClass}" style="left: ${labelX.toFixed(2)}%; top: ${labelLanes[assignedLane].toFixed(2)}%;" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">
-                    <span class="distribution-stock-label">
-                        <span class="distribution-stock-symbol">${escapeHtml(stock.symbol)}</span>
-                    </span>
-                </span>
+                <span class="distribution-stock ${directionClass}" style="left: ${dotX.toFixed(2)}%; top: ${dotLanes[assignedLane].toFixed(2)}%;" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"></span>
             `;
         }).join('');
 
@@ -2299,16 +2293,13 @@ function renderStats(chartData, currentData) {
                     <path class="distribution-line" d="${curvePath}"></path>
                 </svg>
                 ${zeroMarker}
-                <span class="distribution-marker distribution-marker-average" style="left: ${avgPosition.toFixed(2)}%;">
-                    <span>Avg ${formatSignedPercentValue(avg)}</span>
-                </span>
-                <span class="distribution-marker distribution-marker-median" style="left: ${medianPosition.toFixed(2)}%;">
-                    <span>Med ${formatSignedPercentValue(median)}</span>
-                </span>
+                <span class="distribution-marker distribution-marker-average" style="left: ${avgPosition.toFixed(2)}%;" aria-label="Average return ${formatSignedPercentValue(avg)}"></span>
+                <span class="distribution-marker distribution-marker-median" style="left: ${medianPosition.toFixed(2)}%;" aria-label="Median return ${formatSignedPercentValue(median)}"></span>
                 ${distributionDots}
             </div>
             <div class="distribution-axis" aria-hidden="true">
                 <span>${formatSignedPercentValue(distributionMin)}</span>
+                <span>Avg ${formatSignedPercentValue(avg)} / Med ${formatSignedPercentValue(median)}</span>
                 <span>${formatSignedPercentValue(distributionMax)}</span>
             </div>
             <div class="distribution-legend" aria-label="Stock z-scores">
