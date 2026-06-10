@@ -661,10 +661,6 @@ function renderLeaderboard(data) {
                         </span>
                     </div>
                 </div>
-                <div class="leaderboard-mobile-ytd ${item.changePercent === null ? 'no-data' : changeYTDClass}">
-                    <span class="leaderboard-mobile-ytd-label">YTD</span>
-                    <span class="leaderboard-mobile-ytd-value">${item.changePercent !== null ? getChangeSign(item.changePercent) + formatPercent(item.changePercent) + '%' : '-'}</span>
-                </div>
                 <div class="price-percent-combined">
                     <div class="leaderboard-context-metrics">
                         <span class="leaderboard-context-metric">
@@ -1627,7 +1623,7 @@ function renderChart(chartData, currentData) {
                             : '';
 
                         const labelText = isMobile
-                            ? `${symbol} ${ytdFormatted}`
+                            ? `${name} ${symbol} ${ytdFormatted}`
                             : `${name} • ${symbol} • ${ytdFormatted}`;
 
                         const textWidth = ctx.measureText(labelText).width;
