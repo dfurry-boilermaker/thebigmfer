@@ -5,6 +5,28 @@ const leaderboard = document.getElementById('leaderboard');
 const indexes = document.getElementById('indexes');
 let performanceChart = null;
 let managerAnalyses = {}; // Cache for manager analyses
+let chartView = 'field';
+
+const chartViewDescriptions = {
+    all: 'Every pick from the start of the season.',
+    leaders: 'The two front runners, head to head.',
+    field: 'Everyone beyond the two front runners, on a readable scale.'
+};
+
+function setChartView(view) {
+    if (!Object.hasOwn(chartViewDescriptions, view)) return;
+    chartView = view;
+    document.querySelectorAll('.chart-view-tab').forEach(button => {
+        const active = button.dataset.chartView === view;
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-pressed', String(active));
+    });
+    const description = document.getElementById('chartViewDescription');
+    if (description) description.textContent = chartViewDescriptions[view];
+    if (window.lastChartData && window.lastLeaderboardData) {
+        renderChart(window.lastChartData, window.lastLeaderboardData);
+    }
+}
 
 // Theme Management
 function initTheme() {
@@ -41,6 +63,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (themeToggle) {
         themeToggle.addEventListener('click', toggleTheme);
     }
+    document.querySelectorAll('.chart-view-tab').forEach(button => {
+        button.addEventListener('click', () => setChartView(button.dataset.chartView));
+    });
 });
 
 // Load Leaderboard
@@ -95,6 +120,7 @@ async function loadLeaderboard() {
             console.log('Using cached leaderboard data');
             // Extract analyses from cached data
             managerAnalyses = extractAnalysesFromLeaderboardData(cachedData);
+            window.lastLeaderboardData = cachedData;
             renderLeaderboard(cachedData);
             
             // Fetch fresh data in background (don't wait for it)
@@ -112,6 +138,7 @@ async function loadLeaderboard() {
         if (cachedData) {
             console.log('Using expired cached data due to error');
             managerAnalyses = extractAnalysesFromLeaderboardData(cachedData);
+            window.lastLeaderboardData = cachedData;
             renderLeaderboard(cachedData);
             return;
         }
@@ -219,10 +246,49 @@ function getBenchmarkYtd(symbol = 'SPY') {
     try {
         const indexes = JSON.parse(indexCache);
         const benchmark = indexes.find(index => index.symbol === symbol);
-        return benchmark ? benchmark.changePercent : null;
+        return benchmark && Number.isFinite(Number(benchmark.changePercent))
+            && benchmark.changePercent !== null ? Number(benchmark.changePercent) : null;
     } catch (error) {
         return null;
     }
+}
+
+function renderSeasonSummary(data) {
+    const snapshot = document.getElementById('seasonSnapshot');
+    const podium = document.getElementById('podium');
+    if (!snapshot || !podium) return;
+
+    const ranked = [...data]
+        .filter(item => Number.isFinite(Number(item.changePercent)) && item.changePercent !== null)
+        .sort((a, b) => Number(b.changePercent) - Number(a.changePercent));
+    if (ranked.length === 0) return;
+
+    const leader = ranked[0];
+    const gap = ranked.length > 1 ? leader.changePercent - ranked[1].changePercent : null;
+    const middle = Math.floor(ranked.length / 2);
+    const median = ranked.length % 2
+        ? ranked[middle].changePercent
+        : (ranked[middle - 1].changePercent + ranked[middle].changePercent) / 2;
+    const spyYtd = getBenchmarkYtd('SPY');
+    const aboveSpy = spyYtd === null ? null : ranked.filter(item => item.changePercent > spyYtd).length;
+
+    snapshot.innerHTML = `
+        <span class="snapshot-label">THE SEASON SO FAR</span>
+        <div class="snapshot-leader"><span>Current leader</span><strong>${escapeHtml(leader.name)}</strong></div>
+        <div class="snapshot-metrics">
+            <div><span>Lead over #2</span><strong>${gap === null ? '—' : gap.toFixed(1) + ' pts'}</strong></div>
+            <div><span>Field median</span><strong>${formatSignedPercentValue(median)}</strong></div>
+            <div><span>Beating SPY</span><strong>${aboveSpy === null ? '—' : aboveSpy + ' / ' + ranked.length}</strong></div>
+        </div>`;
+
+    podium.innerHTML = ranked.slice(0, 3).map((item, index) => `
+        <article class="podium-card podium-card-${index + 1}">
+            <div class="podium-card-top"><span class="podium-position">#0${index + 1}</span><span class="podium-symbol">${escapeHtml(item.symbol)}</span></div>
+            <div class="podium-card-bottom">
+                <div><span class="podium-caption">${index === 0 ? 'SETTING THE PACE' : index === 1 ? 'IN PURSUIT' : 'ON THE BOARD'}</span><h3>${escapeHtml(item.name)}</h3></div>
+                <strong class="${item.changePercent >= 0 ? 'positive' : 'negative'}">${formatSignedPercentValue(item.changePercent)}</strong>
+            </div>
+        </article>`).join('');
 }
 
 function renderLeaderboard(data) {
@@ -238,6 +304,7 @@ function renderLeaderboard(data) {
     
     console.log('Rendering leaderboard with', data.length, 'items');
     console.log('Manager analyses available:', Object.keys(managerAnalyses).length);
+    renderSeasonSummary(data);
 
     const validYtdValues = data
         .filter(item => item.changePercent !== null && item.changePercent !== undefined)
@@ -376,7 +443,7 @@ function renderLeaderboard(data) {
                     </div>
                 </div>
                 ${hasAnalysis ? `
-                    <div class="analysis-content" id="${analysisId}">
+                    <div class="analysis-content" id="${analysisId}" aria-hidden="true">
                         <div class="analysis-text ${isPlaceholder ? 'placeholder' : ''}">${escapeHtml(analysisBody)}</div>
                     </div>
                 ` : ''}
@@ -404,6 +471,7 @@ window.toggleAnalysis = function(analysisId) {
 
         if (analysisContent.classList.contains('expanded')) {
             analysisContent.classList.remove('expanded');
+            analysisContent.setAttribute('aria-hidden', 'true');
             if (leaderboardItem) {
                 leaderboardItem.setAttribute('aria-expanded', 'false');
             }
@@ -413,6 +481,7 @@ window.toggleAnalysis = function(analysisId) {
             }
         } else {
             analysisContent.classList.add('expanded');
+            analysisContent.setAttribute('aria-hidden', 'false');
             if (leaderboardItem) {
                 leaderboardItem.setAttribute('aria-expanded', 'true');
             }
@@ -440,17 +509,12 @@ document.addEventListener('click', function(event) {
     }
 });
 
-// Keyboard support: Enter/Space toggles a focused leaderboard row
 document.addEventListener('keydown', function(event) {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     const leaderboardItem = event.target.closest('.leaderboard-item.clickable');
-    if (leaderboardItem) {
-        const analysisId = leaderboardItem.getAttribute('data-analysis-id');
-        if (analysisId) {
-            event.preventDefault();
-            window.toggleAnalysis(analysisId);
-        }
-    }
+    if (!leaderboardItem || event.target !== leaderboardItem) return;
+    event.preventDefault();
+    window.toggleAnalysis(leaderboardItem.dataset.analysisId);
 });
 
 
@@ -847,6 +911,11 @@ function renderChart(chartData, currentData) {
             ytdMap[stock.symbol] = stock.changePercent;
         });
     }
+    const rankedSymbols = [...(Array.isArray(currentData) ? currentData : [])]
+        .filter(stock => stock.changePercent !== null && stock.changePercent !== undefined)
+        .sort((a, b) => b.changePercent - a.changePercent)
+        .map(stock => stock.symbol);
+    const frontRunners = new Set(rankedSymbols.slice(0, 2));
     
     const ctx = document.getElementById('performanceChart');
     if (!ctx) {
@@ -1333,6 +1402,9 @@ function renderChart(chartData, currentData) {
         return {
             label: `${stock.name} (${stock.symbol})`,
             data: timeData,
+            hidden: chartView === 'leaders'
+                ? !frontRunners.has(symbol)
+                : chartView === 'field' && rankedSymbols.length > 2 && frontRunners.has(symbol),
             borderColor: color,
             backgroundColor: color,
             borderWidth: isMobile ? 1.5 : 2,
@@ -1431,7 +1503,7 @@ function renderChart(chartData, currentData) {
                 maintainAspectRatio: false,
                 plugins: {
                     title: {
-                        display: true,
+                        display: false,
                         text: 'YTD Performance',
                         position: 'top',
                         align: 'start',
@@ -1569,7 +1641,7 @@ function renderChart(chartData, currentData) {
 
                     chart.data.datasets.forEach((dataset, i) => {
                         const meta = chart.getDatasetMeta(i);
-                        if (!meta || meta.hidden || !meta.data || meta.data.length === 0) return;
+                        if (!meta || !chart.isDatasetVisible(i) || !meta.data || meta.data.length === 0) return;
 
                         const lastPoint = meta.data[meta.data.length - 1];
                         if (!lastPoint || lastPoint.x === undefined || lastPoint.y === undefined) return;
@@ -1583,7 +1655,7 @@ function renderChart(chartData, currentData) {
                             : '';
 
                         const labelText = isMobile
-                            ? `${name} ${symbol} ${ytdFormatted}`
+                            ? `${symbol} ${ytdFormatted}`
                             : `${name} • ${symbol} • ${ytdFormatted}`;
 
                         const textWidth = ctx.measureText(labelText).width;
@@ -2082,6 +2154,8 @@ function renderStats(chartData, currentData) {
     const stdDev = Math.sqrt(variance);
     const positiveCount = ytdValues.filter(v => v >= 0).length;
     const aboveAverageCount = ytdValues.filter(v => v >= avg).length;
+    const spyYtd = getBenchmarkYtd('SPY');
+    const aboveSpyCount = spyYtd === null ? null : ytdValues.filter(v => v > spyYtd).length;
     const leader = validStocks[0];
     const laggard = validStocks[validStocks.length - 1];
     const fieldSpread = leader.changePercent - laggard.changePercent;
@@ -2192,10 +2266,14 @@ function renderStats(chartData, currentData) {
     const summaryHtml = `
         <div class="stats-summary">
             <div class="summary-card featured">
-                <span class="summary-label">Field leader</span>
-                <strong>${escapeHtml(leader.name)}</strong>
-                <span class="summary-value positive">${formatSignedPercentValue(leader.changePercent)}</span>
-                ${leaderDays ? `<span class="summary-note">${leaderDays} trading day${leaderDays === 1 ? '' : 's'} in the lead</span>` : ''}
+                <span class="summary-label">Median return</span>
+                <strong>${formatSignedPercentValue(median)}</strong>
+                <span class="summary-note">Middle of the field</span>
+            </div>
+            <div class="summary-card">
+                <span class="summary-label">Beating SPY</span>
+                <strong>${aboveSpyCount === null ? '—' : aboveSpyCount + '/' + validStocks.length}</strong>
+                <span class="summary-note">${spyYtd === null ? 'Benchmark loading' : 'SPY ' + formatSignedPercentValue(spyYtd)}</span>
             </div>
             <div class="summary-card">
                 <span class="summary-label">Average return</span>
@@ -2203,9 +2281,10 @@ function renderStats(chartData, currentData) {
                 <span class="summary-note">${aboveAverageCount}/${validStocks.length} above average</span>
             </div>
             <div class="summary-card">
-                <span class="summary-label">Median return</span>
-                <strong>${formatSignedPercentValue(median)}</strong>
-                <span class="summary-note">Middle of the field</span>
+                <span class="summary-label">Field leader</span>
+                <strong>${escapeHtml(leader.name)}</strong>
+                <span class="summary-value positive">${formatSignedPercentValue(leader.changePercent)}</span>
+                ${leaderDays ? `<span class="summary-note">${leaderDays} trading day${leaderDays === 1 ? '' : 's'} in the lead</span>` : ''}
             </div>
             <div class="summary-card">
                 <span class="summary-label">Positive picks</span>
@@ -2325,8 +2404,10 @@ async function loadIndexes() {
         }
 
         renderIndexes(data);
-        if (window.lastChartData && window.lastLeaderboardData) {
+        if (window.lastLeaderboardData) {
             renderLeaderboard(window.lastLeaderboardData);
+        }
+        if (window.lastChartData && window.lastLeaderboardData) {
             renderStats(window.lastChartData, window.lastLeaderboardData);
         }
     } catch (error) {
@@ -2461,4 +2542,3 @@ if (document.readyState === 'loading') {
     loadDividends();
     setTimeout(loadChart, 100);
 }
-

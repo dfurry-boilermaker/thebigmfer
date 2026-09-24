@@ -3,121 +3,126 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2026 Stock Competition - The Big MFer</title>
+    <meta name="theme-color" content="#f5f3ed">
+    <meta name="description" content="The 2026 stock picking competition. Follow the standings, the race, and every manager's pick.">
+    <title>The Big MFer — 2026 Stock Competition</title>
     <link rel="icon" type="image/webp" href="bull.logo.webp">
-    <link rel="shortcut icon" type="image/webp" href="bull.logo.webp">
     <link rel="apple-touch-icon" href="bull.logo.webp">
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
-    <!-- Vercel Web Analytics -->
-    <script>
-      window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
-    </script>
+    <script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
     <script defer src="/_vercel/insights/script.js"></script>
 </head>
 <body>
     <div class="container">
-        <header>
-            <div class="header-content">
-                <h1>2026 Stock Competition</h1>
-                <button id="themeToggle" class="theme-toggle" aria-label="Toggle theme">
-                    <span class="theme-toggle-track">
-                        <span class="theme-toggle-handle">
-                            <svg class="theme-icon-sun" width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <circle cx="7" cy="7" r="3" stroke="currentColor" stroke-width="1.5" fill="none"/>
-                                <line x1="7" y1="1" x2="7" y2="0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                                <line x1="7" y1="13" x2="7" y2="14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                                <line x1="1" y1="7" x2="0" y2="7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                                <line x1="13" y1="7" x2="14" y2="7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                                <line x1="2.464" y1="2.464" x2="1.757" y2="1.757" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                                <line x1="11.536" y1="11.536" x2="12.243" y2="12.243" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                                <line x1="2.464" y1="11.536" x2="1.757" y2="12.243" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                                <line x1="11.536" y1="2.464" x2="12.243" y2="1.757" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                            </svg>
-                            <svg class="theme-icon-moon" width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M9.5 9.5C8.5 10.5 7 11 5.5 10.5C6.5 8.5 6.5 6 5.5 4C7 3.5 8.5 4 9.5 5C10.5 6 10.5 8 9.5 9.5Z" fill="currentColor"/>
-                            </svg>
-                        </span>
-                    </span>
-                </button>
-            </div>
+        <header class="site-header">
+            <a class="brand" href="#top" aria-label="The Big MFer, back to top">
+                <span class="brand-mark"><img src="bull.logo.webp" alt="" width="34" height="34"></span>
+                <span class="brand-name">THE BIG <strong>MFER</strong></span>
+            </a>
+            <nav class="site-nav" aria-label="Main navigation">
+                <a href="#race">The race</a>
+                <a href="#standings">Standings</a>
+                <a href="#insights">Insights</a>
+                <a href="#dividends-section">Dividends</a>
+            </nav>
+            <button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle light and dark theme">
+                <span class="theme-toggle-track"><span class="theme-toggle-handle">
+                    <svg class="theme-icon-sun" width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M7 0v1m0 12v1M0 7h1m12 0h1M2 2l1 1m8 8 1 1M2 12l1-1m8-8 1-1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                    <svg class="theme-icon-moon" width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M9.5 9.5C8.5 10.5 7 11 5.5 10.5C6.5 8.5 6.5 6 5.5 4C7 3.5 8.5 4 9.5 5C10.5 6 10.5 8 9.5 9.5Z" fill="currentColor"/></svg>
+                </span></span>
+            </button>
         </header>
 
-        <p id="weeklyRecap" class="weekly-recap" hidden></p>
-
-        <div class="main-content">
-            <!-- Performance Chart -->
-            <section class="chart-section">
-                <div class="chart-container">
-                    <canvas id="performanceChart"></canvas>
+        <main id="top" class="main-content">
+            <section class="hero-section" aria-labelledby="heroTitle">
+                <div class="hero-copy">
+                    <span class="eyebrow"><span class="eyebrow-dot"></span> 2026 STOCK PICKING CHAMPIONSHIP</span>
+                    <h1 id="heroTitle">The market moves.<br><em>Bragging rights stick.</em></h1>
+                    <p>One year. Every pick. A constantly changing race for the top.</p>
+                </div>
+                <div id="seasonSnapshot" class="season-snapshot" aria-live="polite">
+                    <span class="snapshot-label">THE SEASON SO FAR</span>
+                    <div class="snapshot-loading">Loading the latest standings…</div>
                 </div>
             </section>
 
-            <!-- Rank Race (bump chart) -->
-            <section class="chart-section chart-section-bump">
-                <h2>Rank Race</h2>
-                <div class="chart-container chart-container-bump">
-                    <canvas id="bumpChart"></canvas>
+            <p id="weeklyRecap" class="weekly-recap" hidden></p>
+
+            <section class="podium-section" aria-labelledby="podiumTitle">
+                <div class="section-heading editorial-heading">
+                    <div><span class="section-kicker">01 / THE FRONT RUNNERS</span><h2 id="podiumTitle">On the podium</h2></div>
+                    <span class="section-aside">Year-to-date returns</span>
+                </div>
+                <div id="podium" class="podium-grid" aria-live="polite"><div class="loading">Loading the leaders…</div></div>
+            </section>
+
+            <div class="dashboard-grid">
+                <section id="race" class="chart-section" aria-labelledby="raceTitle">
+                    <div class="section-heading editorial-heading race-heading">
+                        <div><span class="section-kicker">02 / THE RACE</span><h2 id="raceTitle">The year in motion</h2></div>
+                    </div>
+                    <div class="chart-panel">
+                        <div class="chart-toolbar">
+                            <p id="chartViewDescription">Everyone beyond the two front runners, on a readable scale.</p>
+                            <div class="chart-view-tabs" role="group" aria-label="Chart view">
+                                <button class="chart-view-tab" type="button" data-chart-view="all" aria-pressed="false">All picks</button>
+                                <button class="chart-view-tab" type="button" data-chart-view="leaders" aria-pressed="false">Leaders</button>
+                                <button class="chart-view-tab active" type="button" data-chart-view="field" aria-pressed="true">The field</button>
+                            </div>
+                        </div>
+                        <div class="chart-container"><canvas id="performanceChart" role="img" aria-label="Year-to-date performance chart for competition picks"></canvas></div>
+                    </div>
+                </section>
+
+                <section id="standings" class="leaderboard-section" aria-labelledby="standingsTitle">
+                    <div class="section-heading editorial-heading standings-heading">
+                        <div><span class="section-kicker">03 / THE STANDINGS</span><h2 id="standingsTitle">Every pick, ranked</h2></div>
+                    </div>
+                    <p class="standings-hint">Select a row to read the manager’s thesis.</p>
+                    <div id="leaderboard" class="leaderboard" aria-live="polite"><div class="loading">Loading the standings…</div></div>
+                </section>
+            </div>
+
+            <section class="chart-section-bump" aria-labelledby="rankRaceTitle">
+                <div class="section-heading editorial-heading">
+                    <div><span class="section-kicker">04 / THE POSITION BATTLE</span><h2 id="rankRaceTitle">Rank race</h2></div>
+                </div>
+                <div class="chart-panel">
+                    <div class="chart-container chart-container-bump"><canvas id="bumpChart" role="img" aria-label="How the managers' ranks have changed during the season"></canvas></div>
                 </div>
             </section>
 
-            <!-- Zoomed Chart (middle pack) -->
-            <section class="chart-section chart-section-zoomed">
-                <div class="section-heading">
-                    <div>
-                        <h2>The Pack</h2>
-                        <p class="section-description">A closer look at managers clustered around the middle of the field.</p>
-                        <div id="packSummary" class="pack-summary" aria-live="polite"></div>
+            <section class="chart-section-zoomed" aria-labelledby="packTitle">
+                <div class="section-heading editorial-heading">
+                    <div><span class="section-kicker">05 / THE CLOSE RACE</span><h2 id="packTitle">The pack</h2><p class="section-description">A closer look at managers clustered around the middle of the field.</p></div>
+                    <div id="packSummary" class="pack-summary" aria-live="polite"></div>
+                </div>
+                <div id="packRace" class="pack-race" aria-live="polite"><div class="loading">Loading pack data…</div></div>
+            </section>
+
+            <section id="insights" class="insights-section" aria-labelledby="insightsTitle">
+                <div class="section-heading editorial-heading"><div><span class="section-kicker">06 / THE CONTEXT</span><h2 id="insightsTitle">Beyond the leaderboard</h2></div></div>
+                <div class="insights-grid">
+                    <div class="indexes-section">
+                        <h3>Market benchmarks</h3>
+                        <div id="indexes" class="indexes"><div class="loading">Loading market data…</div></div>
+                    </div>
+                    <div class="stats-section">
+                        <h3>Field notes</h3>
+                        <div id="statsGrid" class="stats-board"><div class="loading">Loading stats…</div></div>
                     </div>
                 </div>
-                <div id="packRace" class="pack-race" aria-live="polite">
-                    <div class="loading">Loading pack data...</div>
-                </div>
             </section>
 
-            <!-- Benchmarks -->
-            <section class="indexes-section">
-                <h2>Benchmarks</h2>
-                <div id="indexes" class="indexes">
-                    <div class="loading">Loading market data...</div>
-                </div>
+            <section id="dividends-section" class="dividends-section" aria-labelledby="dividendsTitle">
+                <div class="section-heading editorial-heading"><div><span class="section-kicker">07 / THE CASH RETURN</span><h2 id="dividendsTitle">Dividends</h2></div></div>
+                <div id="dividends" class="dividends"><div class="loading">Loading dividend data…</div></div>
             </section>
-
-            <!-- Stats Section -->
-            <section class="stats-section">
-                <div class="section-heading">
-                    <div>
-                        <h2>Statistics</h2>
-                    </div>
-                </div>
-                <div id="statsGrid" class="stats-board">
-                    <div class="loading">Loading stats...</div>
-                </div>
-            </section>
-
-            <!-- Competition Leaderboard -->
-            <section class="leaderboard-section">
-                <div class="leaderboard-header">
-                    <h2>Leaderboard</h2>
-                    <span class="tap-for-analysis">Tap for analysis</span>
-                </div>
-                <div id="leaderboard" class="leaderboard">
-                    <div class="loading">Loading competition data...</div>
-                </div>
-            </section>
-
-            <!-- Dividends -->
-            <section class="dividends-section">
-                <h2>Dividends</h2>
-                <div id="dividends" class="dividends">
-                    <div class="loading">Loading dividend data...</div>
-                </div>
-            </section>
-        </div>
+        </main>
+        <footer class="site-footer"><span>THE BIG MFER · 2026 SEASON</span><span>For bragging rights, not investment advice.</span></footer>
     </div>
-
     <script src="app.js"></script>
 </body>
 </html>
-
