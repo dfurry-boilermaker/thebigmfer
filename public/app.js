@@ -8,9 +8,9 @@ let managerAnalyses = {}; // Cache for manager analyses
 let chartView = 'field';
 
 const chartViewDescriptions = {
-    all: 'Every pick from the start of the season.',
-    leaders: 'The two front runners, head to head.',
-    field: 'Everyone beyond the two front runners, on a readable scale.'
+    all: 'All picks',
+    leaders: 'First and second place',
+    field: 'Picks outside the top two'
 };
 
 function setChartView(view) {
@@ -273,8 +273,8 @@ function renderSeasonSummary(data) {
     const aboveSpy = spyYtd === null ? null : ranked.filter(item => item.changePercent > spyYtd).length;
 
     snapshot.innerHTML = `
-        <span class="snapshot-label">THE SEASON SO FAR</span>
-        <div class="snapshot-leader"><span>Current leader</span><strong>${escapeHtml(leader.name)}</strong></div>
+        <span class="snapshot-label">At a glance</span>
+        <div class="snapshot-leader"><span>Leader</span><strong>${escapeHtml(leader.name)}</strong></div>
         <div class="snapshot-metrics">
             <div><span>Lead over #2</span><strong>${gap === null ? '—' : gap.toFixed(1) + ' pts'}</strong></div>
             <div><span>Field median</span><strong>${formatSignedPercentValue(median)}</strong></div>
@@ -283,11 +283,9 @@ function renderSeasonSummary(data) {
 
     podium.innerHTML = ranked.slice(0, 3).map((item, index) => `
         <article class="podium-card podium-card-${index + 1}">
-            <div class="podium-card-top"><span class="podium-position">#0${index + 1}</span><span class="podium-symbol">${escapeHtml(item.symbol)}</span></div>
-            <div class="podium-card-bottom">
-                <div><span class="podium-caption">${index === 0 ? 'SETTING THE PACE' : index === 1 ? 'IN PURSUIT' : 'ON THE BOARD'}</span><h3>${escapeHtml(item.name)}</h3></div>
-                <strong class="${item.changePercent >= 0 ? 'positive' : 'negative'}">${formatSignedPercentValue(item.changePercent)}</strong>
-            </div>
+            <span class="podium-position">${index + 1}.</span>
+            <div class="podium-identity"><h3>${escapeHtml(item.name)}</h3><span class="podium-symbol">${escapeHtml(item.symbol)}</span></div>
+            <strong class="${item.changePercent >= 0 ? 'positive' : 'negative'}">${formatSignedPercentValue(item.changePercent)}</strong>
         </article>`).join('');
 }
 
@@ -519,7 +517,7 @@ document.addEventListener('keydown', function(event) {
 
 
 function getChangeSign(value) {
-    return value >= 0 ? '+' : '';
+    return value >= 0 ? '+' : '-';
 }
 
 // Utility Functions
@@ -667,8 +665,7 @@ function renderWeeklyRecap(context, currentData) {
     // 1. Biggest mover of the week
     if (context.biggestMover) {
         const mover = context.biggestMover;
-        const verb = mover.move >= 0 ? 'gained' : 'dropped';
-        insights.push(`${mover.symbol} (${mover.name}) ${verb} ${Math.abs(mover.move).toFixed(1)}% this week`);
+        insights.push(`${mover.symbol} (${mover.name}): ${formatSignedPercentValue(mover.move)} over 7 days`);
     }
 
     // 2. Top-3 takeover, falling back to the biggest comeback anywhere in the field
@@ -681,15 +678,15 @@ function renderWeeklyRecap(context, currentData) {
                 .find(s => context.ranksWeekAgo[s] === rank && context.ranksNow[s] > rank);
             const displacedName = displaced ? context.nameBySymbol[displaced] : null;
             rankInsight = displacedName
-                ? `${stock.name} takes #${rank} from ${displacedName}`
-                : `${stock.name} climbs to #${rank}`;
+                ? `${stock.name}: up to #${rank}, ahead of ${displacedName}`
+                : `${stock.name}: up to #${rank}`;
             break;
         }
     }
     if (!rankInsight && context.biggestComeback) {
         const comeback = context.biggestComeback;
         const newRank = context.ranksNow[comeback.symbol];
-        rankInsight = `${comeback.name} climbed ${comeback.rankDelta} spot${comeback.rankDelta === 1 ? '' : 's'} to #${newRank}`;
+        rankInsight = `${comeback.name}: up ${comeback.rankDelta} place${comeback.rankDelta === 1 ? '' : 's'} to #${newRank}`;
     }
     if (rankInsight) insights.push(rankInsight);
 
@@ -701,9 +698,9 @@ function renderWeeklyRecap(context, currentData) {
             ? Object.values(context.daysInLead).reduce((a, b) => a + b, 0)
             : 0;
         if (leadDays && totalDays > 0) {
-            insights.push(`${leader.name} (${leader.symbol}) has led ${leadDays} of ${totalDays} trading days`);
+            insights.push(`${leader.name} (${leader.symbol}): first on ${leadDays} of ${totalDays} trading days`);
         } else {
-            insights.push(`${leader.name} (${leader.symbol}) just took the overall lead`);
+            insights.push(`${leader.name} (${leader.symbol}): currently first`);
         }
     }
 
@@ -717,7 +714,7 @@ function renderWeeklyRecap(context, currentData) {
             }
         }
         if (tightest) {
-            insights.push(`Just ${tightest.gap.toFixed(1)} pts separate #${tightest.upper} and #${tightest.lower}`);
+            insights.push(`#${tightest.upper} and #${tightest.lower}: ${tightest.gap.toFixed(1)} pts apart`);
         }
     }
 
@@ -2246,7 +2243,7 @@ function renderStats(chartData, currentData) {
         const mover = dramaContext.biggestMover;
         dramaCardsHtml += `
             <div class="summary-card">
-                <span class="summary-label">Biggest mover (7d)</span>
+                <span class="summary-label">Largest 7-day move</span>
                 <strong>${escapeHtml(mover.name || mover.symbol)}</strong>
                 <span class="summary-value ${mover.move >= 0 ? 'positive' : 'negative'}">${formatSignedPercentValue(mover.move)} this week</span>
             </div>
@@ -2256,7 +2253,7 @@ function renderStats(chartData, currentData) {
         const comeback = dramaContext.biggestComeback;
         dramaCardsHtml += `
             <div class="summary-card">
-                <span class="summary-label">Biggest comeback (7d)</span>
+                <span class="summary-label">Rank gain (7 days)</span>
                 <strong>${escapeHtml(comeback.name || comeback.symbol)}</strong>
                 <span class="summary-note">&#9650;${comeback.rankDelta} place${comeback.rankDelta === 1 ? '' : 's'} this week</span>
             </div>

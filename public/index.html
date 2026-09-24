@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#f5f3ed">
+    <meta name="theme-color" content="#f8f8f6">
     <meta name="description" content="The 2026 stock picking competition. Follow the standings, the race, and every manager's pick.">
     <title>The Big MFer — 2026 Stock Competition</title>
     <link rel="icon" type="image/webp" href="bull.logo.webp">
@@ -38,9 +38,9 @@
         <main id="top" class="main-content">
             <section class="hero-section" aria-labelledby="heroTitle">
                 <div class="hero-copy">
-                    <span class="eyebrow"><span class="eyebrow-dot"></span> 2026 STOCK PICKING CHAMPIONSHIP</span>
-                    <h1 id="heroTitle">The market moves.<br><em>Bragging rights stick.</em></h1>
-                    <p>One year. Every pick. A constantly changing race for the top.</p>
+                    <span class="eyebrow">THE BIG MFER / 2026</span>
+                    <h1 id="heroTitle">Stock competition</h1>
+                    <p>Year-to-date performance for every pick.</p>
                 </div>
                 <div id="seasonSnapshot" class="season-snapshot" aria-live="polite">
                     <span class="snapshot-label">THE SEASON SO FAR</span>
@@ -52,7 +52,7 @@
 
             <section class="podium-section" aria-labelledby="podiumTitle">
                 <div class="section-heading editorial-heading">
-                    <div><span class="section-kicker">01 / THE FRONT RUNNERS</span><h2 id="podiumTitle">On the podium</h2></div>
+                    <div><h2 id="podiumTitle">Top three</h2></div>
                     <span class="section-aside">Year-to-date returns</span>
                 </div>
                 <div id="podium" class="podium-grid" aria-live="polite"><div class="loading">Loading the leaders…</div></div>
@@ -61,11 +61,11 @@
             <div class="dashboard-grid">
                 <section id="race" class="chart-section" aria-labelledby="raceTitle">
                     <div class="section-heading editorial-heading race-heading">
-                        <div><span class="section-kicker">02 / THE RACE</span><h2 id="raceTitle">The year in motion</h2></div>
+                        <div><h2 id="raceTitle">Performance</h2></div>
                     </div>
                     <div class="chart-panel">
                         <div class="chart-toolbar">
-                            <p id="chartViewDescription">Everyone beyond the two front runners, on a readable scale.</p>
+                            <p id="chartViewDescription">Picks outside the top two</p>
                             <div class="chart-view-tabs" role="group" aria-label="Chart view">
                                 <button class="chart-view-tab" type="button" data-chart-view="all" aria-pressed="false">All picks</button>
                                 <button class="chart-view-tab" type="button" data-chart-view="leaders" aria-pressed="false">Leaders</button>
@@ -78,7 +78,7 @@
 
                 <section id="standings" class="leaderboard-section" aria-labelledby="standingsTitle">
                     <div class="section-heading editorial-heading standings-heading">
-                        <div><span class="section-kicker">03 / THE STANDINGS</span><h2 id="standingsTitle">Every pick, ranked</h2></div>
+                        <div><h2 id="standingsTitle">Standings</h2></div>
                     </div>
                     <p class="standings-hint">Select a row to read the manager’s thesis.</p>
                     <div id="leaderboard" class="leaderboard" aria-live="polite"><div class="loading">Loading the standings…</div></div>
@@ -87,7 +87,7 @@
 
             <section class="chart-section-bump" aria-labelledby="rankRaceTitle">
                 <div class="section-heading editorial-heading">
-                    <div><span class="section-kicker">04 / THE POSITION BATTLE</span><h2 id="rankRaceTitle">Rank race</h2></div>
+                    <div><h2 id="rankRaceTitle">Rank history</h2></div>
                 </div>
                 <div class="chart-panel">
                     <div class="chart-container chart-container-bump"><canvas id="bumpChart" role="img" aria-label="How the managers' ranks have changed during the season"></canvas></div>
@@ -96,28 +96,28 @@
 
             <section class="chart-section-zoomed" aria-labelledby="packTitle">
                 <div class="section-heading editorial-heading">
-                    <div><span class="section-kicker">05 / THE CLOSE RACE</span><h2 id="packTitle">The pack</h2><p class="section-description">A closer look at managers clustered around the middle of the field.</p></div>
+                    <div><h2 id="packTitle">The pack</h2><p class="section-description">A closer view of picks near the middle of the standings.</p></div>
                     <div id="packSummary" class="pack-summary" aria-live="polite"></div>
                 </div>
                 <div id="packRace" class="pack-race" aria-live="polite"><div class="loading">Loading pack data…</div></div>
             </section>
 
             <section id="insights" class="insights-section" aria-labelledby="insightsTitle">
-                <div class="section-heading editorial-heading"><div><span class="section-kicker">06 / THE CONTEXT</span><h2 id="insightsTitle">Beyond the leaderboard</h2></div></div>
+                <div class="section-heading editorial-heading"><div><h2 id="insightsTitle">Benchmarks &amp; statistics</h2></div></div>
                 <div class="insights-grid">
                     <div class="indexes-section">
                         <h3>Market benchmarks</h3>
                         <div id="indexes" class="indexes"><div class="loading">Loading market data…</div></div>
                     </div>
                     <div class="stats-section">
-                        <h3>Field notes</h3>
+                        <h3>Field summary</h3>
                         <div id="statsGrid" class="stats-board"><div class="loading">Loading stats…</div></div>
                     </div>
                 </div>
             </section>
 
             <section id="dividends-section" class="dividends-section" aria-labelledby="dividendsTitle">
-                <div class="section-heading editorial-heading"><div><span class="section-kicker">07 / THE CASH RETURN</span><h2 id="dividendsTitle">Dividends</h2></div></div>
+                <div class="section-heading editorial-heading"><div><h2 id="dividendsTitle">Dividends</h2></div></div>
                 <div id="dividends" class="dividends"><div class="loading">Loading dividend data…</div></div>
             </section>
         </main>
